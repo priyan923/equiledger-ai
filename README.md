@@ -7,9 +7,7 @@ The Market Gap Addressed
 EquiLedger AI fixes this by running **localized client-side OCR automation** combined with an interactive pass-around interface requiring zero extra app downloads for friends at the table.
  Cloud Architecture & Native Tech Stack
 
-Our system utilizes a hybrid model engineered to operate completely inside zero-overhead, cost-free pricing tiers:
-
-* **Frontend Engine & Backend Routing:** `Next.js` running on `Vercel Serverless Architecture` (Continuous Deployment tied directly to GitHub production loops).
-* **AI Vision Layer:** `Tesseract.js` — An open-source Optical Character Recognition subsystem executing inside the user's local web client, bypassing expensive cloud AI billing parameters.
-* **Persistent Database Storage:** `Amazon DynamoDB` — Managed NoSQL data platform running on the AWS Always-Free Tier to evaluate active ledgers and debt tracking profiles.
+* **Frontend Engine & Backend Routing:** `Next.js` running on `Vercel Serverless Architecture`.
+* **AI Vision Layer:** `Tesseract.js` — An open-source Optical Character Recognition subsystem executing inside the user's local web client.
+* **Persistent Database Storage:** `Amazon DynamoDB` — Managed NoSQL data platform running on the AWS to evaluate active ledgers and debt tracking profiles.
 * **Backup Object Architecture:** `Amazon S3` — Asset bucket preserving raw receipt copies securely for future cloud compliance checks.
