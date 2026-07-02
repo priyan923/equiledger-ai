@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>EquiLedgerAI | Secure Register</title>
+        <link rel="stylesheet" href="styles.css">
+    </head>
+    <body>
+        <main class="auth-shell">
+            <section class="brand-lockup" aria-label="EquiLedgerAI">
+                <div class="brand-mark" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="22" height="22">
+                        <path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v11a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 17.5z" fill="none" stroke="currentColor" stroke-width="1.8"/>
+                        <path d="M8 9h7.5a2 2 0 0 1 0 4H13a2 2 0 0 0 0 4h5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                    </svg>
+                </div>
+                <h1>EquiLedgerAI</h1>
+                <p>Secure Signup · Amazon Cognito</p>
+            </section>
+
+            <section class="login-card" aria-labelledby="login-title">
+                <header class="login-card__header">
+                    <span aria-hidden="true">◇</span>
+                    <h2 id="login-title">Create your account</h2>
+                </header>
+
+                <form id="registerForm" class="register-form" novalidate>
+                    <button id="googleLogin" class="google-button" type="button">
+                        <span class="google-g">G</span>
+                        <span>Continue with Google</span>
+                    </button>
+                    
+                    <div class="divider"><span>or</span></div>
+
+                    <label class="field">
+                        <span>Full Name</span>
+                        <span class="input-wrap">
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="7" r="4" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
+                            <input id="regName" type="text" autocomplete="name" placeholder="Jane Doe" required>
+                        </span>
+                    </label>
+
+                    <label class="field">
+                        <span>Email Address</span>
+                        <span class="input-wrap">
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v12H4z" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="m4 7 8 6 8-6" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
+                            <input id="regEmail" type="email" autocomplete="email" placeholder="you@company.com" required>
+                        </span>
+                        <small id="emailError" class="error-text"></small>
+                    </label>
+
+                    <label class="field">
+                        <span>Password</span>
+                        <span class="input-wrap">
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10V8a5 5 0 0 1 10 0v2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M6 10h12v10H6z" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
+                            <input id="regPassword" type="password" autocomplete="new-password" placeholder="••••••••••" required>
+                            <button id="togglePassword" class="ghost-icon" type="button" aria-label="Show password">
+                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.5-5 9.5-5 9.5 5 9.5 5-3.5 5-9.5 5-9.5-5-9.5-5z" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="12" cy="12" r="2.5" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
+                            </button>
+                        </span>
+                        <small id="passwordError" class="error-text"></small>
+                    </label>
+
+                    <label class="field">
+                        <span>Confirm Password</span>
+                        <span class="input-wrap">
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10V8a5 5 0 0 1 10 0v2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M6 10h12v10H6z" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
+                            <input id="regConfirmPassword" type="password" autocomplete="new-password" placeholder="••••••••••" required>
+                            <button id="toggleConfirmPassword" class="ghost-icon" type="button" aria-label="Show password">
+                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.5-5 9.5-5 9.5 5 9.5 5-3.5 5-9.5 5-9.5-5-9.5-5z" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="12" cy="12" r="2.5" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
+                            </button>
+                        </span>
+                        <small id="confirmPasswordError" class="error-text"></small>
+                    </label>
+
+                    <button class="primary-button" type="submit">Sign Up</button>
+
+                    <p id="registerStatus" class="auth-status" role="status"></p>
+                </form>
+
+                <form id="confirmForm" class="register-form" hidden novalidate>
+                    <div style="text-align: center; margin-bottom: 20px; font-size: 0.95rem; color: #555;">
+                        <p>We sent a 6-digit code to your email.<br>Enter it below to verify your account.</p>
+                    </div>
+                    
+                    <label class="field">
+                        <span>Verification Code</span>
+                        <span class="input-wrap">
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
+                            <input id="confirmCode" type="text" placeholder="123456" required>
+                        </span>
+                    </label>
+
+                    <button class="primary-button" type="submit">Verify Account</button>
+                    
+                    <p id="confirmStatus" class="auth-status" role="status"></p>
+                </form>
+
+            </section>
+
+            <footer class="auth-footer">Protected by TLS 1.3 · Encrypted session tokens · SOC2</footer>
+        </main>
+        
+        <script src="./auth.js"></script>       
+    </body>
+</html>
