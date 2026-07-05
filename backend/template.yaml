@@ -1,0 +1,292 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: EquiLedgerAI serverless backend with Cognito, API Gateway, Lambda, S3, and DynamoDB.
+
+Parameters:
+  CognitoUserPoolArn:
+    Type: String
+    Description: ARN of the Cognito User Pool that federates Google login.
+  CognitoUserPoolClientId:
+    Type: String
+    Description: App Client ID of the Cognito User Pool (public client, no secret) used for native email/password sign-up.
+  AllowedOrigin:
+    Type: String
+    Default: '*'
+    Description: Static frontend origin for CORS. Use your CloudFront/S3 website URL in production.
+  GeminiApiKey:
+    Type: String
+    NoEcho: true
+    Default: ''
+    Description: Gemini API key used by the S3 ObjectCreated OCR Lambda.
+
+Globals:
+  Function:
+    Runtime: python3.14
+    Timeout: 12
+    MemorySize: 256
+    Architectures:
+      - x86_64
+    Environment:
+      Variables:
+        LEDGER_TABLE: !Ref LedgerTable
+        RECEIPTS_TABLE: !Ref ReceiptsTable
+        OCR_RESULTS_TABLE: !Ref OcrResultsTable
+        ALLOWED_ORIGIN: !Ref AllowedOrigin
+
+Resources:
+  EquiLedgerApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: prod
+      Cors:
+        AllowMethods: "'GET,POST,OPTIONS'"
+        AllowHeaders: "'Content-Type,Authorization'"
+        AllowOrigin: !Sub "'${AllowedOrigin}'"
+      Auth:
+        DefaultAuthorizer: CognitoAuthorizer
+        AddDefaultAuthorizerToCorsPreflight: false
+        Authorizers:
+          CognitoAuthorizer:
+            UserPoolArn: !Ref CognitoUserPoolArn
+
+  LedgerTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+        - AttributeName: sk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+
+  ReceiptsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+        - AttributeName: sk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+
+  OcrResultsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+        - AttributeName: sk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+
+  ReceiptsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${AWS::StackName}-receipts-${AWS::AccountId}'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders: ['*']
+            AllowedMethods: [PUT, GET]
+            AllowedOrigins: [!Ref AllowedOrigin]
+            MaxAge: 3000
+      NotificationConfiguration:
+        LambdaConfigurations:
+          - Event: 's3:ObjectCreated:*'
+            Function: !GetAtt OcrFunction.Arn
+
+  LedgerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: functions/ledger/
+      Handler: app.handler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref LedgerTable
+      Events:
+        LedgerRoot:
+          Type: Api
+          Properties:
+            RestApiId: !Ref EquiLedgerApi
+            Path: /ledger
+            Method: ANY
+        Activity:
+          Type: Api
+          Properties:
+            RestApiId: !Ref EquiLedgerApi
+            Path: /activity
+            Method: GET
+
+  ReceiptsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: functions/receipts/
+      Handler: app.handler
+      Environment:
+        Variables:
+          RECEIPTS_BUCKET: !Sub '${AWS::StackName}-receipts-${AWS::AccountId}'
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ReceiptsTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref OcrResultsTable
+        - S3CrudPolicy:
+            BucketName: !Sub '${AWS::StackName}-receipts-${AWS::AccountId}'
+      Events:
+        UploadUrl:
+          Type: Api
+          Properties:
+            RestApiId: !Ref EquiLedgerApi
+            Path: /receipts/upload-url
+            Method: POST
+        ReceiptStatus:
+          Type: Api
+          Properties:
+            RestApiId: !Ref EquiLedgerApi
+            Path: /receipts/status
+            Method: GET
+        Receipts:
+          Type: Api
+          Properties:
+            RestApiId: !Ref EquiLedgerApi
+            Path: /receipts
+            Method: ANY
+
+  OcrFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: functions/ocr/
+      Handler: lambda_ocr.handler
+      Timeout: 30
+      MemorySize: 512
+      Environment:
+        Variables:
+          GEMINI_API_KEY: !Ref GeminiApiKey
+          RECEIPTS_BUCKET: !Sub '${AWS::StackName}-receipts-${AWS::AccountId}'
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref OcrResultsTable
+        - S3ReadPolicy:
+            BucketName: !Sub '${AWS::StackName}-receipts-${AWS::AccountId}'
+
+
+  SplitLedgerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: functions/split_ledger/
+      Handler: lambda_ledger.handler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref LedgerTable
+      Events:
+        FinalizeSplit:
+          Type: Api
+          Properties:
+            RestApiId: !Ref EquiLedgerApi
+            Path: /groups/{groupId}/splits
+            Method: POST
+
+  ProfileFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: functions/profile/
+      Handler: app.handler
+      Events:
+        Profile:
+          Type: Api
+          Properties:
+            RestApiId: !Ref EquiLedgerApi
+            Path: /profile
+            Method: GET
+
+  AuthRegisterFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: functions/auth_register/
+      Handler: app.handler
+      Environment:
+        Variables:
+          COGNITO_CLIENT_ID: !Ref CognitoUserPoolClientId
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:SignUp
+                - cognito-idp:ConfirmSignUp
+                - cognito-idp:ResendConfirmationCode
+                - cognito-idp:InitiateAuth
+              Resource: !Ref CognitoUserPoolArn
+      Events:
+        Register:
+          Type: Api
+          Properties:
+            RestApiId: !Ref EquiLedgerApi
+            Path: /auth/register
+            Method: POST
+            Auth:
+              Authorizer: NONE
+        Confirm:
+          Type: Api
+          Properties:
+            RestApiId: !Ref EquiLedgerApi
+            Path: /auth/confirm
+            Method: POST
+            Auth:
+              Authorizer: NONE
+        ResendCode:
+          Type: Api
+          Properties:
+            RestApiId: !Ref EquiLedgerApi
+            Path: /auth/resend-code
+            Method: POST
+            Auth:
+              Authorizer: NONE
+        Login: 
+          Type: Api
+          Properties:
+            RestApiId: !Ref EquiLedgerApi
+            Path: /auth/login
+            Method: POST
+            Auth:
+              Authorizer: NONE
+
+  OcrFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: 'lambda:InvokeFunction'
+      FunctionName: !GetAtt OcrFunction.Arn
+      Principal: 's3.amazonaws.com'
+      SourceAccount: !Ref 'AWS::AccountId'
+
+Outputs:
+  ApiUrl:
+    Description: API Gateway invoke URL for frontend/app.js
+    Value: !Sub 'https://${EquiLedgerApi}.execute-api.${AWS::Region}.amazonaws.com/prod'
+  ReceiptsBucketName:
+    Description: Private S3 bucket for user receipt uploads
+    Value: !Ref ReceiptsBucket
+  LedgerTableName:
+    Description: DynamoDB ledger table
+    Value: !Ref LedgerTable
+  OcrResultsTableName:
+    Description: DynamoDB OCR extraction result table
+    Value: !Ref OcrResultsTable
