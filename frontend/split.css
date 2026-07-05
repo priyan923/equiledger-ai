@@ -1,0 +1,448 @@
+:root {
+  --bg: #050505;
+  --panel: #12110f;
+  --line: #2b2a27;
+  --muted: #7b837c;
+  --text: #fffaf4;
+  --pink: #ead2d0;
+  --green: #83b886;
+  --blue: #6da2ff;
+  --red: #d85f65;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  color: var(--text);
+  background:
+    radial-gradient(circle at 18% 18%, rgba(234, 210, 208, .035), transparent 18rem),
+    radial-gradient(circle at 83% 20%, rgba(109, 162, 255, .035), transparent 20rem),
+    var(--bg);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+}
+
+button { font: inherit; cursor: pointer; }
+
+.split-shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-rows: auto auto 1fr auto;
+}
+
+.split-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  min-height: 76px;
+  padding: 18px 26px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+}
+
+.title-lockup {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.square-icon {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  background: #262321;
+  color: var(--pink);
+  font-size: 12px;
+}
+
+h1 {
+  margin: 0 0 5px;
+  font-size: 18px;
+  letter-spacing: 0;
+}
+
+p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.progress-block {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.progress-track {
+  width: 90px;
+  height: 4px;
+  background: #2b2e29;
+  border-radius: 99px;
+}
+
+.progress-track span {
+  display: block;
+  width: 0;
+  height: 100%;
+  background: var(--green);
+  border-radius: inherit;
+}
+
+.members-section,
+.items-section {
+  padding: 20px 26px 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.kicker {
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .28em;
+  font-size: 12px;
+}
+
+.friend-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  margin-top: 16px;
+}
+
+.friend-card {
+  min-height: 76px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--text);
+  text-align: left;
+}
+
+.friend-card.is-active {
+  box-shadow: 0 0 34px rgba(234, 210, 208, .18);
+}
+
+.friend-card[data-color="pink"].is-active {
+  border-color: var(--pink);
+  background: #322b2b;
+}
+
+.friend-card[data-color="green"].is-active {
+  border-color: var(--green);
+  background: #1b291c;
+}
+
+.friend-card[data-color="blue"].is-active {
+  border-color: var(--blue);
+  background: #172235;
+}
+
+.avatar {
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #292723;
+  font-weight: 900;
+}
+
+.friend-card.is-active .avatar {
+  color: #101010;
+}
+
+.friend-card[data-color="pink"].is-active .avatar { background: var(--pink); }
+.friend-card[data-color="green"].is-active .avatar { background: var(--green); }
+.friend-card[data-color="blue"].is-active .avatar { background: var(--blue); }
+
+.active-pill {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 4px 7px;
+  background: rgba(255,255,255,.10);
+  color: inherit;
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.items-section {
+  border-bottom: 0;
+}
+
+.item-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.item-row {
+  position: relative;
+  min-height: 110px;
+  display: grid;
+  grid-template-columns: 48px 1fr auto;
+  align-items: center;
+  gap: 24px;
+  padding: 18px 14px 18px 22px;
+  border: 1px solid #4a4841;
+  background: var(--panel);
+  color: var(--text);
+  text-align: left;
+}
+
+.item-row[data-owner="aman"] {
+  border-color: var(--pink);
+  background: #322b2b;
+}
+
+.item-row[data-owner="gargi"] {
+  border-color: var(--green);
+  background: #1b291c;
+}
+
+.item-row[data-owner="rohan"] {
+  border-color: var(--blue);
+  background: #172235;
+}
+
+.item-emoji {
+  font-size: 27px;
+}
+
+.item-row h2 {
+  margin: 0 0 6px;
+  font-size: 17px;
+}
+
+.owner-chip {
+  display: inline-block;
+  min-height: 19px;
+  padding: 4px 7px;
+  background: rgba(255,255,255,.09);
+  color: #e5e2d7;
+  font-size: 11px;
+}
+
+.check {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 22px;
+  height: 22px;
+  display: none;
+  place-items: center;
+  border-radius: 50%;
+  color: #111;
+}
+
+.item-row[data-owner] .check { display: grid; }
+.item-row[data-owner="aman"] .check { background: var(--pink); }
+.item-row[data-owner="gargi"] .check { background: var(--green); }
+.item-row[data-owner="rohan"] .check { background: var(--blue); }
+
+.split-footer {
+  position: sticky;
+  bottom: 0;
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 20px;
+  min-height: 86px;
+  padding: 18px 26px;
+  border-top: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.split-footer span {
+  display: block;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.split-footer strong {
+  display: block;
+  margin-top: 6px;
+  font-size: 22px;
+}
+
+.split-footer button,
+.settlement-actions button {
+  min-width: 178px;
+  height: 44px;
+  border: 0;
+  background: #423938;
+  color: var(--text);
+  font-weight: 900;
+}
+
+.split-footer button.is-ready {
+  background: var(--pink);
+  color: #15100f;
+}
+
+.settlement-shell {
+  width: min(560px, calc(100vw - 32px));
+  margin: 18px auto 48px;
+}
+
+.settlement-head {
+  text-align: center;
+  margin-bottom: 22px;
+}
+
+.rupee-orb {
+  width: 54px;
+  height: 54px;
+  display: grid;
+  place-items: center;
+  margin: 0 auto 14px;
+  border-radius: 50%;
+  background: #292523;
+  font-size: 26px;
+}
+
+.settlement-card {
+  border: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.settlement-total {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 22px 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.settlement-total span,
+.summary-box .kicker {
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .24em;
+  font-size: 10px;
+}
+
+.settlement-total strong {
+  display: block;
+  margin-top: 5px;
+  font-size: 30px;
+}
+
+.settlement-total p {
+  font-size: 12px;
+  line-height: 1.8;
+}
+
+.settlement-row {
+  display: grid;
+  grid-template-columns: 44px 1fr auto;
+  gap: 14px;
+  padding: 22px 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.settlement-row h2 {
+  margin: 0 0 12px;
+  font-size: 15px;
+}
+
+.settlement-row[data-person="aman"] h2,
+.settlement-row[data-person="aman"] .amount { color: var(--pink); }
+.settlement-row[data-person="gargi"] h2,
+.settlement-row[data-person="gargi"] .amount { color: var(--green); }
+.settlement-row[data-person="rohan"] h2,
+.settlement-row[data-person="rohan"] .amount { color: var(--blue); }
+
+.item-pill {
+  display: inline-block;
+  margin: 0 5px 8px 0;
+  padding: 5px 8px;
+  background: #24211f;
+  color: #e5e2d7;
+  font-size: 11px;
+}
+
+.settlement-note {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.amount {
+  text-align: right;
+  font-weight: 900;
+}
+
+.summary-box {
+  padding: 18px;
+}
+
+.summary-line {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 16px;
+}
+
+.summary-line span:first-child {
+  color: var(--green);
+}
+
+.summary-line b {
+  color: var(--blue);
+}
+
+.settlement-actions {
+  display: grid;
+  grid-template-columns: 1fr 3fr;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.settlement-actions .secondary {
+  background: transparent;
+  border: 1px solid var(--line);
+}
+
+.settlement-actions .primary {
+  background: #3c78ee;
+}
+
+.saved-shell {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 10px;
+  text-align: center;
+}
+
+.saved-mark {
+  width: 62px;
+  height: 62px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(134,184,137,.16);
+  color: var(--green);
+  border: 1px solid rgba(134,184,137,.35);
+  font-size: 34px;
+}
+
+@media (max-width: 820px) {
+  .split-header,
+  .split-footer,
+  .settlement-total {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .friend-cards,
+  .item-grid,
+  .split-footer {
+    grid-template-columns: 1fr;
+  }
+}

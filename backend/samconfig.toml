@@ -1,0 +1,13 @@
+version = 0.1
+
+[default.deploy.parameters]
+stack_name = "equiledger-backend"
+resolve_s3 = true
+s3_prefix = "equiledger-backend"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM"
+parameter_overrides = "CognitoUserPoolArn=\"arn:aws:cognito-idp:ap-south-1:135135391985:userpool/ap-south-1_qr1JMZHtg\" CognitoUserPoolClientId=\"7vu57irkraujafgp7kuhlimflu\" AllowedOrigin=\"*\""
+image_repositories = []
+
+[default.global.parameters]
+region = "ap-south-1"

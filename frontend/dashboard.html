@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>EquiLedgerAI | Workspace</title>
+  <link rel="stylesheet" href="./dashboard.css">
+</head>
+<body>
+  <header class="app-topbar">
+    <a class="brand" href="#dashboard" data-view-link="dashboard" aria-label="EquiLedgerAI dashboard">
+      <span class="brand-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v11a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 17.5z" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8 9h7.5a2 2 0 0 1 0 4H13a2 2 0 0 0 0 4h5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      </span>
+      <span>EquiLedgerAI</span>
+    </a>
+
+    <nav class="main-tabs" aria-label="Workspace views">
+      <button class="tab-button is-active" type="button" data-view="dashboard">
+        <span aria-hidden="true">⌘</span> Dashboard
+      </button>
+      <button class="tab-button" type="button" data-view="imports">
+        <span aria-hidden="true">▣</span> Imports
+      </button>
+      <button class="tab-button" type="button" data-view="analytics">
+        <span aria-hidden="true">▥</span> Analytics
+      </button>
+    </nav>
+
+    <div class="header-actions">
+      <div class="mode-cluster" aria-label="Tracker mode">
+        <span aria-hidden="true">👤</span>
+        <button id="modeToggle" class="mode-toggle" type="button" aria-pressed="false">
+          <span class="sr-only">Switch between Personal and Group</span>
+          <span class="mode-knob"></span>
+        </button>
+        <span aria-hidden="true">👥</span>
+      </div>
+      <button id="recordButton" class="record-button" type="button"><span>＋</span> Record</button>
+      <button id="profileButton" class="avatar-button" type="button" aria-haspopup="true" aria-expanded="false">AV</button>
+      <aside id="profileMenu" class="profile-menu" aria-label="Profile menu" hidden>
+        <strong>Aman Verma</strong>
+        <span>aman@example.com</span>
+        <button type="button">⚙ Settings</button>
+        <button id="logoutButton" class="danger-action" type="button">↪ Logout</button>
+      </aside>
+    </div>
+  </header>
+
+  <main class="workspace">
+    <section id="dashboardView" class="view is-active" aria-labelledby="dashboardTitle">
+      <div class="view-title">
+        <h1 id="dashboardTitle">Personal Expense Tracker</h1>
+        <p id="dashboardSubtitle">June 2025 · Personal View · Open AI</p>
+      </div>
+      <section id="metricGrid" class="metric-grid" aria-label="Financial metrics"></section>
+      <section id="dashboardPanels" class="dashboard-panels"></section>
+      <section id="topCategories" class="wide-panel"></section>
+      <section id="ledgerPanel" class="wide-panel"></section>
+    </section>
+
+    <section id="importsView" class="view" aria-labelledby="importsTitle">
+      <div class="view-title view-title--narrow">
+        <h1 id="importsTitle">Imported Receipts & Invoices</h1>
+        <p>Receipts parsed by Open AI · stored in Amazon S3</p>
+      </div>
+      <section id="dropZone" class="drop-zone" tabindex="0">
+        <input id="receiptFile" type="file" multiple accept="image/*,.pdf" hidden>
+        <div class="upload-icon">⇧</div>
+        <strong>Drop receipts & invoices here</strong>
+        <p>JPG · PNG · PDF · Open AI parses · stored in S3</p>
+        <div class="chips"><span>S3 Storage</span><span>Open AI OCR</span><span>Lambda Trigger</span></div>
+      </section>
+      <section class="wide-panel imports-list">
+        <div class="panel-kicker">Imported documents · S3 bucket</div>
+        <div id="documentList"></div>
+      </section>
+    </section>
+
+    <section id="analyticsView" class="view" aria-labelledby="analyticsTitle">
+      <div class="view-title">
+        <h1 id="analyticsTitle">Analytics & Insights</h1>
+        <p>Statistical insights · 6-month transaction history</p>
+      </div>
+      <section class="analytics-grid">
+        <article class="chart-card">
+          <div class="panel-kicker">Spending vs Income · 6mo</div>
+          <svg class="line-chart" viewBox="0 0 680 260" role="img" aria-label="Spending versus income chart">
+            <g class="grid-lines"></g>
+            <path class="income-area" d="M50 90 C160 90 190 90 250 62 S360 92 430 90 S570 92 640 60 L640 245 L50 245 Z"/>
+            <path class="spend-area" d="M50 145 C145 125 205 130 270 150 S360 116 430 122 S560 145 640 165 L640 245 L50 245 Z"/>
+            <path class="income-line" d="M50 90 C160 90 190 90 250 62 S360 92 430 90 S570 92 640 60"/>
+            <path class="spend-line" d="M50 145 C145 125 205 130 270 150 S360 116 430 122 S560 145 640 165"/>
+            <g class="axis-labels">
+              <text x="40" y="245">0</text><text x="36" y="186">1500</text><text x="36" y="135">3000</text><text x="36" y="84">4500</text><text x="36" y="33">6000</text>
+              <text x="50" y="268">Jan</text><text x="170" y="268">Feb</text><text x="290" y="268">Mar</text><text x="410" y="268">Apr</text><text x="530" y="268">May</text><text x="635" y="268">Jun</text>
+            </g>
+          </svg>
+        </article>
+        <article class="chart-card distribution-card">
+          <div class="panel-kicker">Category distribution</div>
+          <div class="donut" aria-hidden="true"></div>
+          <div id="categoryBars" class="category-bars"></div>
+        </article>
+        <article class="chart-card">
+          <div class="panel-kicker">Weekly spend · June</div>
+          <div class="bar-chart" aria-label="Weekly spending bars">
+            <span style="height:14%"></span><span style="height:38%"></span><span style="height:22%"></span><span class="hot" style="height:86%"></span><span style="height:28%"></span><span style="height:52%"></span><span style="height:18%"></span>
+          </div>
+          <div class="bar-labels"><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span></div>
+        </article>
+        <article class="chart-card">
+          <div class="panel-kicker">Savings velocity</div>
+          <svg class="line-chart" viewBox="0 0 680 260" role="img" aria-label="Savings velocity chart">
+            <g class="grid-lines"></g>
+            <path class="spend-area" d="M50 145 C145 170 185 160 250 85 S350 210 430 178 S560 130 640 35 L640 245 L50 245 Z"/>
+            <path class="spend-line" d="M50 145 C145 170 185 160 250 85 S350 210 430 178 S560 130 640 35"/>
+            <circle cx="50" cy="145" r="4"/><circle cx="170" cy="158" r="4"/><circle cx="250" cy="85" r="4"/><circle cx="410" cy="182" r="4"/><circle cx="530" cy="150" r="4"/><circle cx="640" cy="35" r="4"/>
+            <g class="axis-labels"><text x="36" y="245">0</text><text x="30" y="185">700</text><text x="24" y="135">1400</text><text x="24" y="84">2100</text><text x="24" y="33">2800</text><text x="50" y="268">Jan</text><text x="170" y="268">Feb</text><text x="290" y="268">Mar</text><text x="410" y="268">Apr</text><text x="530" y="268">May</text><text x="635" y="268">Jun</text></g>
+          </svg>
+        </article>
+      </section>
+    </section>
+  </main>
+  <script src="./config.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>
