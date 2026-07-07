@@ -26,18 +26,18 @@
   <main class="imports-page">
     <section class="page-title">
       <h1 id="importsTitle">Imported Receipts & Invoices</h1>
-      <p id="importsSubtitle">Receipts parsed by Gemini · stored in Amazon S3</p>
+      <p id="importsSubtitle">Receipts parsed by Textract & Gemini AI · stored in Amazon S3</p>
     </section>
 
     <section id="dropZone" class="drop-zone" tabindex="0" aria-label="Drop receipts and invoices">
       <input id="fileInput" type="file" accept="image/*,.pdf" multiple hidden>
       <div class="upload-orb">⇧</div>
       <strong>Drop receipts & invoices here</strong>
-      <p>JPG · PNG · PDF · Gemini parses · stored in S3</p>
+      <p>JPG · PNG · PDF · Textract & Gemini AI parse · stored in S3</p>
       <div class="chips">
         <span>S3 Storage</span>
-        <span>Gemini Vision</span>
-        <span>Lambda Trigger</span>
+        <span>Textract OCR</span>
+        <span>Gemini AI Refinement</span>
       </div>
     </section>
 
@@ -47,6 +47,7 @@
     </section>
   </main>
 
+  <!-- The rest of the modal structure remains unchanged to ensure JS compatibility -->
   <div id="recordChoice" class="record-choice" hidden>
     <button id="chooseManual" type="button">✎ Log Manually</button>
     <button id="chooseScan" type="button">▣ Scan Bill</button>
@@ -97,7 +98,7 @@
         <span class="scan-mark">Ψ</span>
         <div>
           <h2 id="scanTitle">Scan Group Bill</h2>
-          <p id="scanSubtitle">Trip to Goa · Gemini Vision API</p>
+          <p id="scanSubtitle">Trip to Goa · Textract OCR</p>
         </div>
         <button id="closeScan" class="icon-button" type="button" aria-label="Close">×</button>
       </header>
@@ -110,28 +111,18 @@
           <button id="uploadBillPhoto" type="button">▣ Upload Bill Photo</button>
         </div>
         <div id="scanBusy" class="scan-state">
-          <pre id="scanPreview">RESTAURANT BILL
-
-Margherita Pizza ₹350
-Garlic Bread ₹120
-Pasta Arrabbiata ₹300
-Cold Drink (x2) ₹120
-Chicken Burger ₹220
-Cheese Fries ₹150
-
-Subtotal ₹1260
-TOTAL ₹1323</pre>
+          <pre id="scanPreview">Processing...</pre>
           <span class="scanner-band"></span>
-          <b class="scanner-label">⟳ Gemini analyzing...</b>
+          <b class="scanner-label">⟳ Textract & AI scanning...</b>
         </div>
         <div id="scanDone" class="scan-state">
           <div class="success-orb">✓</div>
           <strong>Bill parsed successfully!</strong>
-          <p id="scanDoneSummary">6 items extracted · ₹1,323 total with GST</p>
-          <div id="scanDoneChips" class="chips"><span>6 Items</span><span>₹1,323</span><span>GST 5%</span></div>
+          <p id="scanDoneSummary">Extracting...</p>
+          <div id="scanDoneChips" class="chips"></div>
         </div>
       </div>
-      <div id="scanStatus" class="scan-status">⚙ Gemini OCR ready · S3 upload on scan</div>
+      <div id="scanStatus" class="scan-status">⚙ Textract ready · S3 upload on scan</div>
       <footer class="modal-foot">
         <button id="cancelScan" class="secondary-button" type="button">Cancel</button>
         <button id="assignFromScan" class="green-button" type="button" disabled>Assign Items →</button>
@@ -139,12 +130,6 @@ TOTAL ₹1323</pre>
     </section>
   </div>
 
-  <aside id="confirmation" class="confirmation-pop" hidden>
-    <div class="success-orb">✓</div>
-    <strong id="confirmationText">File verified by backend. 6 specific items extracted for a total value of ₹1,323</strong>
-    <button id="assignItems" type="button">Assign Items</button>
-  </aside>
-  <script src="./config.js"></script>
   <script src="./import.js"></script>
 </body>
 </html>

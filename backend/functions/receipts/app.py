@@ -87,11 +87,13 @@ def get_ocr_status(object_key):
     item = result.get("Item")
     if not item:
         return {"status": "PROCESSING"}
+    # --- Ensure strict schema for the Split team ---
     return {
         "status": item.get("status", "PARSED"),
         "parsed": item.get("parsed"),
         "objectKey": item.get("objectKey"),
         "createdAt": item.get("createdAt"),
+        "error": item.get("error"),
     }
 
 
