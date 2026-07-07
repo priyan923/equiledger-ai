@@ -141,12 +141,3 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
-
-.venv/
-venv/
-env/
-__pycache__/
-*.pyc
-.aws-sam/
-
-config.js
