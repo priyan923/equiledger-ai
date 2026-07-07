@@ -1,12 +1,8 @@
 (function () {
   'use strict';
-
   const API_CONFIG = {
-    // TODO: Replace with the ApiUrl output from backend/template.yaml
-    // (same value you put in split.js / app.js), e.g.
-    // 'https://abc123.execute-api.ap-south-1.amazonaws.com/prod'
-    baseUrl: 'YOUR_API_GATEWAY_INVOKE_URL'
-  };
+  baseUrl: 'https://cx0vxq44ic.execute-api.ap-south-1.amazonaws.com/prod'
+};
 
   const POLL_INTERVAL_MS = 2000;
   const POLL_MAX_ATTEMPTS = 30;
