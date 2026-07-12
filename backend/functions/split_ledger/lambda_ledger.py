@@ -7,6 +7,7 @@ from uuid import uuid4
 import boto3
 
 
+
 dynamodb = boto3.resource("dynamodb")
 ledger_table = dynamodb.Table(os.environ["LEDGER_TABLE"])
 ALLOWED_ORIGIN = os.environ.get("ALLOWED_ORIGIN", "*")
