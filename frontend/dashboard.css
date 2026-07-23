@@ -477,6 +477,9 @@ p { color: var(--muted); font-size: 20px; }
     justify-content:center;
     z-index:1000;
 }
+[hidden] {
+  display: none !important;
+}
 
 .group-modal-card{
     width:420px;

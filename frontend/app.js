@@ -542,15 +542,10 @@ async function createGroup() {
 
     document.querySelector('#logoutButton').addEventListener('click', () => { sessionStorage.clear(); window.location.assign('./index.html'); });
     document.querySelector("#closeGroupModal")?.addEventListener("click", () => {
-
-    console.trace("openGroupSelector called");
-
-    modal.hidden = true;
-
+    document.querySelector("#groupModal").hidden = true;
     document.querySelector("#createGroupForm").hidden = true;
     document.querySelector("#groupList").hidden = false;
     document.querySelector("#newGroupButton").hidden = false;
-
 });
     
     document.querySelector("#newGroupButton")
