@@ -27,21 +27,45 @@
     ]
   };
 
-  const friends = [
-    { id: 'aman', name: 'Aman', initials: 'AM', color: 'pink' },
-    { id: 'gargi', name: 'Gargi', initials: 'GA', color: 'green' },
-    { id: 'rohan', name: 'Rohan', initials: 'RO', color: 'blue' }
-  ];
+  let friends = [];
 
-  const payerId = 'aman';
+const groupData = JSON.parse(
+    sessionStorage.getItem("equiledger.activeGroup") || "null"
+);
+
+if (groupData && groupData.members) {
+
+    friends = groupData.members.map(name => ({
+        id: name.toLowerCase().replace(/\s+/g, "-"),
+        name,
+        initials: name.substring(0,2).toUpperCase(),
+        color: "blue"
+    }));
+
+}
+
+  const payerId = friends.length ? friends[0].id : "";
   const bill = JSON.parse(sessionStorage.getItem('equiledger.parsedBill') || 'null') || fallbackBill;
+  const selectedGroup =
+    sessionStorage.getItem('equiledger.selectedGroup');
+
+if (groupData) {
+    bill.groupId = groupData.groupId;
+}
+
+if (groupData && !sessionStorage.getItem('equiledger.activeGroupId')) {
+    sessionStorage.setItem(
+        'equiledger.activeGroupId',
+        groupData.groupId
+    );
+}
+
   const assignments = bill.items.map(item => ({ itemId: item.id, friendIds: [] }));
   let activeFriendId = 'aman';
   let finalPayload = null;
 
   const rupee = value => `₹${Math.round(value)}`;
-  const token = () => sessionStorage.getItem('equiledger.accessToken') || '';
-
+  const token = () => sessionStorage.getItem('equiledger.idToken') || '';
   function getItem(id) {
     return bill.items.find(item => item.id === id);
   }
@@ -62,7 +86,10 @@
   }
 
   function finalBalanceFor(friendId) {
-    const taxRatio = bill.taxes / bill.subtotal;
+    const taxRatio =
+    bill.subtotal > 0
+        ? bill.taxes / bill.subtotal
+        : 0;
     return baseShareFor(friendId) * (1 + taxRatio);
   }
 
@@ -150,7 +177,10 @@
   }
 
   function buildSettlementPayload() {
-    const taxRatio = bill.taxes / bill.subtotal;
+    const taxRatio =
+    bill.subtotal > 0
+        ? bill.taxes / bill.subtotal
+        : 0;
     const balances = friends.map(friend => {
       const items = assignedItemsFor(friend.id).map(item => {
         const assignment = getAssignment(item.id);
@@ -227,7 +257,7 @@
     return [
       `${(finalPayload.receiptId || 'group-receipt').replace(/\s+/g, '_')}.jpg`,
       `Shore Bistro, Goa · Paid by ${payerName}`,
-      'Dining · Group',
+      `${groupData.groupName} · Group`,
       'Parsed',
       `$${finalPayload.total}`
     ];
@@ -250,6 +280,8 @@
     }
 
     document.querySelector('#settlementScreen').hidden = true;
+    sessionStorage.removeItem('equiledger.parsedBill');
+    sessionStorage.removeItem('activeBillData');
     document.querySelector('#savedScreen').hidden = false;
   }
 

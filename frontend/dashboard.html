@@ -36,12 +36,18 @@
         </button>
         <span aria-hidden="true">👥</span>
       </div>
-      <button id="recordButton" class="record-button" type="button"><span>＋</span> Record</button>
-      <button id="profileButton" class="avatar-button" type="button" aria-haspopup="true" aria-expanded="false">AV</button>
-      <aside id="profileMenu" class="profile-menu" aria-label="Profile menu" hidden>
+      <button id="recordButton" class="record-button" type="button" aria-label="Record Transaction"><span>＋</span> Record</button>
+      <button id="profileButton" class="avatar-button" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="profileMenu">AV</button>
+      <aside id="profileMenu" class="profile-menu" aria-label="Profile menu"  aria-hidden="true" hidden>
         <strong>Aman Verma</strong>
         <span>aman@example.com</span>
-        <button type="button">⚙ Settings</button>
+        <button
+        id="settingsButton"
+        type="button"
+        class="profile-dropdown-item"
+        aria-label="Open Settings">
+        ⚙ Settings
+        </button>
         <button id="logoutButton" class="danger-action" type="button">↪ Logout</button>
       </aside>
     </div>
@@ -54,7 +60,7 @@
         <p id="dashboardSubtitle">June 2025 · Personal View · Open AI</p>
       </div>
       <section id="metricGrid" class="metric-grid" aria-label="Financial metrics"></section>
-      <section id="dashboardPanels" class="dashboard-panels"></section>
+      <section id="dashboardPanels" class="dashboard-panels" aria-live="polite"></section>
       <section id="topCategories" class="wide-panel"></section>
       <section id="ledgerPanel" class="wide-panel"></section>
     </section>
@@ -64,7 +70,7 @@
         <h1 id="importsTitle">Imported Receipts & Invoices</h1>
         <p>Receipts parsed by Open AI · stored in Amazon S3</p>
       </div>
-      <section id="dropZone" class="drop-zone" tabindex="0">
+      <section id="dropZone" class="drop-zone" data-upload-state="idle" tabindex="0">
         <input id="receiptFile" type="file" multiple accept="image/*,.pdf" hidden>
         <div class="upload-icon">⇧</div>
         <strong>Drop receipts & invoices here</strong>
@@ -73,14 +79,15 @@
       </section>
       <section class="wide-panel imports-list">
         <div class="panel-kicker">Imported documents · S3 bucket</div>
-        <div id="documentList"></div>
+        <div id="documentList" aria-live="polite"></div>
       </section>
     </section>
 
     <section id="analyticsView" class="view" aria-labelledby="analyticsTitle">
       <div class="view-title">
         <h1 id="analyticsTitle">Analytics & Insights</h1>
-        <p>Statistical insights · 6-month transaction history</p>
+          <p id="analyticsSubtitle">
+          Transaction insights </p>
       </div>
       <section class="analytics-grid">
         <article class="chart-card">
@@ -100,7 +107,7 @@
         <article class="chart-card distribution-card">
           <div class="panel-kicker">Category distribution</div>
           <div class="donut" aria-hidden="true"></div>
-          <div id="categoryBars" class="category-bars"></div>
+          <div id="categoryBars" class="category-bars" aria-live="polite"></div>
         </article>
         <article class="chart-card">
           <div class="panel-kicker">Weekly spend · June</div>
@@ -122,7 +129,65 @@
       </section>
     </section>
   </main>
+  <div id="groupModal" class="group-modal" hidden>
+
+  <div class="group-modal-card">
+
+    <h2>Select Group</h2>
+
+    <div id="groupList" class="group-list"></div>
+
+    <div id="createGroupForm" hidden>
+
+  <input
+    id="groupNameInput"
+    class="auth-input"
+    type="text"
+    placeholder="Group Name">
+
+  <textarea
+    id="groupMembersInput"
+    class="auth-input"
+    rows="4"
+    placeholder="Member emails (comma separated)"></textarea>
+
+  <div class="group-form-actions">
+    <button
+      id="saveGroupButton"
+      class="record-button"
+      type="button">
+      Create Group
+    </button>
+
+    <button
+      id="backToGroupsButton"
+      class="profile-dropdown-item"
+      type="button">
+      Back
+    </button>
+  </div>
+
+</div>
+
+    <button
+      id="newGroupButton"
+      class="record-button"
+      type="button">
+      + Create New Group
+    </button>
+
+    <button
+      id="closeGroupModal"
+      class="profile-dropdown-item"
+      type="button">
+      Cancel
+    </button>
+
+  </div>
+
+</div>
   <script src="./config.js"></script>
   <script src="./app.js"></script>
+  
 </body>
 </html>

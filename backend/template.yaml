@@ -205,6 +205,29 @@ Resources:
             Path: /groups/{groupId}/splits
             Method: POST
 
+    GroupsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: functions/groups/
+      Handler: app.handler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref LedgerTable
+      Events:
+        GroupsRoot:
+          Type: Api
+          Properties:
+            RestApiId: !Ref EquiLedgerApi
+            Path: /groups
+            Method: ANY
+
+        GroupById:
+          Type: Api
+          Properties:
+            RestApiId: !Ref EquiLedgerApi
+            Path: /groups/{groupId}
+            Method: GET
+
   ProfileFunction:
     Type: AWS::Serverless::Function
     Properties:

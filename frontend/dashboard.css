@@ -468,3 +468,55 @@ p { color: var(--muted); font-size: 20px; }
   .ledger-head, .ledger-row, .document-row { grid-template-columns: 1fr; gap: 8px; padding: 16px 0; }
   h1 { font-size: 26px; }
 }
+.group-modal{
+    position:fixed;
+    inset:0;
+    background:rgba(0,0,0,.55);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    z-index:1000;
+}
+
+.group-modal-card{
+    width:420px;
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:18px;
+    padding:24px;
+}
+
+.group-modal-card h2{
+    margin-bottom:20px;
+}
+
+.group-list{
+    display:flex;
+    flex-direction:column;
+    gap:12px;
+    margin-bottom:20px;
+}
+
+.group-item{
+    padding:14px 18px;
+    border:1px solid var(--line);
+    border-radius:12px;
+    cursor:pointer;
+    transition:.2s;
+}
+
+.group-item:hover{
+    background:rgba(255,255,255,.05);
+}
+
+.group-form-actions{
+    display:flex;
+    gap:12px;
+    margin-top:18px;
+}
+
+#groupNameInput,
+#groupMembersInput{
+    width:100%;
+    margin-bottom:14px;
+}

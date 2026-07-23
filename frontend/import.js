@@ -7,8 +7,10 @@
   const POLL_INTERVAL_MS = 2000;
   const POLL_MAX_ATTEMPTS = 30;
 
-  const token = () => sessionStorage.getItem('equiledger.accessToken') || '';
-
+  const token = () => sessionStorage.getItem('equiledger.idToken') || '';
+  function currentMode() {
+  return sessionStorage.getItem('equiledger.mode') || 'personal';
+   }
   function apiUrl(path) { return `${API_CONFIG.baseUrl.replace(/\/$/, '')}${path}`; }
 
   async function gatewayFetch(path, options = {}) {
@@ -24,7 +26,22 @@
 
   async function renderDocuments() {
     try {
-      const res = await gatewayFetch('/receipts');
+      let url = '/receipts';
+
+if (currentMode() === 'group') {
+
+    const groupId =
+        sessionStorage.getItem('equiledger.activeGroupId');
+
+    url += `?mode=group&groupId=${encodeURIComponent(groupId)}`;
+
+} else {
+
+    url += '?mode=personal';
+
+}
+
+const res = await gatewayFetch(url);
       if (!res.ok) return;
       const data = await res.json();
       // GET /receipts (backend/functions/receipts/app.py) returns { items: [...] },
@@ -39,7 +56,7 @@
           <div><strong>${r.fileName}</strong><p>${meta}</p></div>
           <span class="badge">${r.category}</span>
           <span class="positive">◎ ${r.status}</span>
-          <strong>${r.amount != null ? '$' + r.amount : ''}</strong>
+          <strong>${r.amount != null ? '₹' + r.amount : ''}</strong>
         </div>
       `;
       }).join('');
@@ -72,7 +89,8 @@
     }));
 
     return {
-      groupId: sessionStorage.getItem('equiledger.activeGroupId') || 'trip-to-goa',
+      groupId:
+      sessionStorage.getItem('equiledger.activeGroupId'),
       receiptId: (file && file.name ? file.name.replace(/\.[^.]+$/, '') : `receipt-${Date.now()}`),
       subtotal: Number(parsed.subtotal) || 0,
       taxes: Number(parsed.tax) || 0,
@@ -83,7 +101,10 @@
 
   async function handleScan(file, mode) {
     document.querySelector('#scanOverlay').hidden = false;
-    setScanState('busy', '⚙ Textract scanning and Gemini AI refinement...');
+    setScanState(
+    'busy',
+    'Processing receipt...'
+    );
 
     try {
       // 1. Upload to S3[cite: 3]
@@ -103,9 +124,17 @@
 
       // Record the receipt so it shows up in the documents list / DynamoDB right away.
       await gatewayFetch('/receipts', {
-        method: 'POST',
-        body: JSON.stringify({ objectKey: presign.objectKey, fileName: file.name, mode })
-      });
+    method: 'POST',
+    body: JSON.stringify({
+        objectKey: presign.objectKey,
+        fileName: file.name,
+        mode,
+        groupId:
+            mode === 'group'
+                ? sessionStorage.getItem('equiledger.activeGroupId')
+                : null
+    })
+});
 
       // 2. Poll for final data from backend[cite: 3]
       let parsed = null;
@@ -131,21 +160,58 @@
       if (!parsed) throw new Error('Parsing timed out');
 
       // --- Persist data for the Split team, in the shape split.js expects ---
-      const splitBill = toSplitBillShape(parsed, file);
-      sessionStorage.setItem('equiledger.parsedBill', JSON.stringify(splitBill));
-      // Kept for backwards compatibility with anything else reading the raw OCR payload.
-      sessionStorage.setItem('activeBillData', JSON.stringify(parsed));
-      // -------------------------------------------
+const splitBill = toSplitBillShape(parsed, file);
 
+if (mode === 'group') {
+
+    const activeGroup = sessionStorage.getItem('equiledger.activeGroupId');
+
+    if (!activeGroup) {
+
+        document.querySelector('#scanOverlay').hidden = true;
+
+        alert("Please create or select a group first.");
+
+        return;
+    }
+
+    splitBill.groupId = activeGroup;
+}
+
+sessionStorage.setItem(
+    'equiledger.parsedBill',
+    JSON.stringify(splitBill)
+);
+
+
+sessionStorage.setItem(
+    'activeBillData',
+    JSON.stringify(parsed)
+);
+    
+}
+     
       // 3. UI Update[cite: 3]
       document.querySelector('#scanDoneSummary').textContent = 
-        `${parsed.items?.length || 0} items extracted · $${parsed.total}`;
+        `${parsed.items?.length || 0} items extracted · ₹${parsed.total}`;
       setScanState('done', '✓ Parsing complete.');
       document.querySelector('#assignFromScan').disabled = false;
       
       // --- Enable navigation to split.html ---
       const assignBtn = document.querySelector('#assignFromScan');
-      assignBtn.onclick = () => { window.location.href = './split.html'; };
+      assignBtn.onclick = () => {
+
+    if (mode === 'group') {
+
+        window.location.href = './split.html';
+
+    } else {
+
+        window.location.href = './dashboard.html';
+
+    }
+
+};
       // -------------------------------------------
 
       renderDocuments();
@@ -184,7 +250,7 @@
     // Actually react to file selection - this was previously missing, which
     // is why nothing happened after picking a file in the OS file dialog.
     fileInput.addEventListener('change', (e) => {
-      handleFiles(e.target.files, 'personal');
+      handleFiles(e.target.files, currentMode());
       fileInput.value = '';
     });
 
@@ -202,7 +268,7 @@
       });
     });
     dropZone.addEventListener('drop', (e) => {
-      handleFiles(e.dataTransfer?.files, 'personal');
+      handleFiles(e.dataTransfer?.files, currentMode());
     });
 
     // Explicitly link the upload button (inside the Scan Bill modal) to the file input
@@ -247,7 +313,11 @@
         fileName: document.querySelector('#manualDescription').value || 'Manual entry',
         category: document.querySelector('#manualCategory').value || 'Other',
         amount: Number(document.querySelector('#manualAmount').value) || 0,
-        mode: 'personal'
+        mode: currentMode(),
+         groupId:
+        currentMode() === 'group'
+            ? sessionStorage.getItem('equiledger.activeGroupId')
+            : null
       };
       try {
         const res = await gatewayFetch('/receipts', { method: 'POST', body: JSON.stringify(payload) });

@@ -46,45 +46,70 @@
   const dollar = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
 
   function token() {
-    return sessionStorage.getItem('equiledger.idToken') || '';
-  }
+  return (
+    sessionStorage.getItem("equiledger.idToken") ||
+    sessionStorage.getItem("idToken") ||
+    ""
+  );
+}
 
   async function loadUserProfile() {
-    try {
-      const res = await apiFetch('/profile', { cache: 'no-store' });
-      if (!res.ok) throw new Error('Network request to /profile failed');
-      
-      const profile = await res.json();
-      const userName = profile.name;
-      const userEmail = profile.email;
+  try {
+    const res = await apiFetch("/profile", {
+      cache: "no-store"
+    });
 
-      const nameParts = userName.split(/[._ ]/);
-      let initials = "US";
-      if (nameParts.length > 1 && nameParts[1].length > 0) {
-        initials = (nameParts[0][0] + nameParts[1][0]).toUpperCase();
-      } else {
-        initials = userName.substring(0, 2).toUpperCase();
-      }
-
-      document.querySelector('#profileButton').textContent = initials;
-      
-      const profileMenu = document.querySelector('#profileMenu');
-      profileMenu.querySelector('strong').textContent = userName;
-      profileMenu.querySelector('span').textContent = userEmail;
-
-    } catch (err) {
-      console.error('Could not load user profile from backend:', err);
+    if (!res.ok) {
+      throw new Error("Unable to load profile");
     }
+
+    const profile = await res.json();
+
+    const userName = profile.name || "User";
+    const userEmail = profile.email || "";
+
+    const initials = userName
+      .split(" ")
+      .map(word => word[0])
+      .join("")
+      .substring(0, 2)
+      .toUpperCase();
+
+    document.querySelector("#profileButton").textContent = initials;
+
+    const menu = document.querySelector("#profileMenu");
+
+    menu.querySelector("strong").textContent = userName;
+    menu.querySelector("span").textContent = userEmail;
+
+  } catch (err) {
+    console.error(err);
   }
+}
 
   async function apiFetch(path, options = {}) {
-    const headers = {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token()}`,
-      ...(options.headers || {})
-    };
-    return fetch(`${API_CONFIG.baseUrl.replace(/\/$/, '')}${path}`, { ...options, headers });
+  const headers = {
+    ...(options.headers || {})
+  };
+
+  if (!(options.body instanceof FormData)) {
+    headers["Content-Type"] = "application/json";
   }
+
+  const jwt = token();
+
+  if (jwt) {
+    headers.Authorization = `Bearer ${jwt}`;
+  }
+
+  return fetch(
+    `${API_CONFIG.baseUrl.replace(/\/$/, "")}${path}`,
+    {
+      ...options,
+      headers
+    }
+  );
+}
 
   function currentMode() {
     const key = isGroupModeActive ? 'group' : 'personal';
@@ -223,7 +248,7 @@
 
   function groupCard(icon, title, people, balance, tx) {
     const cls = balance.startsWith('+') ? 'positive' : 'negative';
-    return `<article class="group-card"><div class="group-icon">${icon}</div><h2>${title}</h2><p>${people}</p><div class="group-meta"><div><span class="sub-label">Balance</span><strong class="${cls}">${balance}</strong></div><div><span class="sub-label">Transactions</span><strong>${tx}</strong></div></div></article>`;
+    return `<article class="group-card" data-group-name="${title}"  tabindex="0"><div class="group-icon">${icon}</div><h2>${title}</h2><p>${people}</p><div class="group-meta"><div><span class="sub-label">Balance</span><strong class="${cls}">${balance}</strong></div><div><span class="sub-label">Transactions</span><strong>${tx}</strong></div></div></article>`;
   }
 
   function activity(initials, title, sub, amount, cls) {
@@ -270,21 +295,52 @@
   }
 
   function updateMode() {
+
     writeStoredMode(isGroupModeActive);
-    const title = document.querySelector('#dashboardTitle');
-    const subtitle = document.querySelector('#dashboardSubtitle');
-    document.querySelector('#modeToggle').setAttribute('aria-pressed', String(isGroupModeActive));
-    title.textContent = isGroupModeActive ? 'Group Expense Tracker' : 'Personal Expense Tracker';
-    subtitle.textContent = isGroupModeActive ? 'June 2025 · Group Workspace · Gemini' : 'June 2025 · Personal View · OpenAI';
+
+    const title = document.querySelector("#dashboardTitle");
+    const subtitle = document.querySelector("#dashboardSubtitle");
+
+    document
+        .querySelector("#modeToggle")
+        .setAttribute("aria-pressed", String(isGroupModeActive));
+
+    title.textContent = isGroupModeActive
+        ? "Group Expense Tracker"
+        : "Personal Expense Tracker";
+
+    subtitle.textContent = isGroupModeActive
+        ? "June 2025 · Group Workspace · Gemini"
+        : "June 2025 · Personal View · Gemini";
+
     renderMetrics();
-    
+
     if (isGroupModeActive) {
-      renderGroupDashboard();
+        renderGroupDashboard();
+
+        document.querySelectorAll(".group-card").forEach(card => {
+
+            card.onclick = () => {
+
+                sessionStorage.setItem(
+                    "equiledger.selectedGroup",
+                    card.dataset.groupName
+                );
+
+                window.location.assign("./split.html");
+
+            };
+
+        });
+
     } else {
-      renderPersonalDashboard();
-      setupAIChat(); 
+
+        renderPersonalDashboard();
+        setupAIChat();
+
     }
-  }
+
+}
 
   function showView(view) {
     document.querySelectorAll('.view').forEach(el => el.classList.remove('is-active'));
@@ -327,7 +383,145 @@
       console.error('Receipt upload failed', err);
     }
   }
+function openGroupSelector(groups) {
+    console.log("openGroupSelector called");
 
+
+    const modal = document.querySelector("#groupModal");
+    const list = document.querySelector("#groupList");
+
+    if (!modal || !list) return;
+
+    modal.hidden = true;          // keep hidden until we're ready
+    list.innerHTML = "";
+
+    if (!Array.isArray(groups)) {
+        groups = [];
+    }
+
+    if (groups.length === 0) {
+
+        list.innerHTML = `
+            <div class="group-item">
+                <strong>No groups found</strong>
+                <small>Create your first expense group.</small>
+            </div>
+        `;
+
+    } else {
+
+        groups.forEach(group => {
+
+            const item = document.createElement("div");
+            item.className = "group-item";
+
+            item.innerHTML = `
+                <strong>${group.groupName}</strong><br>
+                <small>${group.members.length} member${group.members.length === 1 ? "" : "s"}</small>
+            `;
+
+            item.onclick = () => {
+
+                sessionStorage.setItem(
+                    "equiledger.selectedGroupId",
+                    group.groupId
+                );
+
+                sessionStorage.setItem(
+                    "equiledger.selectedGroup",
+                    group.groupName
+                );
+
+                modal.hidden = true;
+
+                window.location.assign("./split.html");
+            };
+
+            list.appendChild(item);
+
+        });
+
+    }
+
+    document.querySelector("#groupList").hidden = false;
+    document.querySelector("#newGroupButton").hidden = false;
+    document.querySelector("#createGroupForm").hidden = true;
+
+    modal.hidden = false;      // ONLY opens when this function is called
+}
+
+async function createGroup() {
+
+    const groupName = document
+        .querySelector("#groupNameInput")
+        .value
+        .trim();
+
+    const members = document
+        .querySelector("#groupMembersInput")
+        .value
+        .split(",")
+        .map(x => x.trim())
+        .filter(Boolean);
+
+    if (!groupName) {
+        alert("Please enter a group name.");
+        return;
+    }
+
+    try {
+
+        const response = await apiFetch("/groups", {
+            method: "POST",
+            body: JSON.stringify({
+                groupName,
+                members
+            })
+        });
+
+        if (!response.ok) {
+            alert("Failed to create group.");
+            return;
+        }
+
+        document.querySelector("#groupNameInput").value = "";
+        document.querySelector("#groupMembersInput").value = "";
+
+        const groups = await loadGroups();
+
+        openGroupSelector(groups);
+
+    } catch (err) {
+
+        console.error(err);
+        alert("Unable to create group.");
+
+    }
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+  async function loadGroups() {
+
+  const response = await apiFetch("/groups");
+
+  if (!response.ok) {
+    return [];
+  }
+
+  return await response.json();
+}
   function init() {
     if (!token()) {
       console.warn('No Cognito access token found. Keep this redirect in production; comment it during local UI work.');
@@ -339,11 +533,54 @@
     document.querySelector('#profileButton').addEventListener('click', () => {
       const menu = document.querySelector('#profileMenu');
       menu.hidden = !menu.hidden;
-      document.querySelector('#profileButton').setAttribute('aria-expanded', String(!menu.hidden));
+      document.querySelector("#profileButton")
+      .setAttribute(
+          "aria-expanded",
+          String(!menu.hidden)
+      );
     });
+
     document.querySelector('#logoutButton').addEventListener('click', () => { sessionStorage.clear(); window.location.assign('./index.html'); });
-    document.querySelector('#recordButton').addEventListener('click', () => {
-      window.location.assign('./import.html');
+    document.querySelector("#closeGroupModal")?.addEventListener("click", () => {
+
+    console.trace("openGroupSelector called");
+
+    modal.hidden = true;
+
+    document.querySelector("#createGroupForm").hidden = true;
+    document.querySelector("#groupList").hidden = false;
+    document.querySelector("#newGroupButton").hidden = false;
+
+});
+    
+    document.querySelector("#newGroupButton")
+    .addEventListener("click", () => {
+    
+        document.querySelector("#groupList").hidden = true;
+        document.querySelector("#newGroupButton").hidden = true;
+    
+        document.querySelector("#createGroupForm").hidden = false;
+    
+    });
+    document.querySelector('#settingsButton')?.addEventListener('click', () => {
+      // Placeholder until settings page is implemented
+      alert('Settings page will be available in the next update.');
+    });
+
+    document.querySelector('#recordButton').addEventListener('click', async () => {
+        // Personal Expense Tracker
+  if (!isGroupModeActive) {
+    window.location.assign("./import.html");
+    return;
+ }
+   try {
+        const groups = await loadGroups();
+        openGroupSelector(groups);
+    } catch (err) {
+        console.error(err);
+        alert("Unable to load groups.");
+    }
+
     });
 
     const fileInput = document.querySelector('#receiptFile');

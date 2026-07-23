@@ -72,14 +72,30 @@ def create_receipt(user_id, payload):
     return item
 
 
-def list_receipts(user_id):
+def list_receipts(user_id, mode="personal", group_id=None):
+
     result = table.query(
         KeyConditionExpression="pk = :pk AND begins_with(sk, :prefix)",
-        ExpressionAttributeValues={":pk": f"USER#{user_id}", ":prefix": "RECEIPT#"},
+        ExpressionAttributeValues={
+            ":pk": f"USER#{user_id}",
+            ":prefix": "RECEIPT#"
+        },
         ScanIndexForward=False,
         Limit=50,
     )
-    return result.get("Items", [])
+
+    receipts = result.get("Items", [])
+
+    if mode == "group":
+        return [
+            r for r in receipts
+            if r.get("groupId") == group_id
+        ]
+
+    return [
+        r for r in receipts
+        if not r.get("groupId")
+    ]
 
 
 def get_ocr_status(object_key):
@@ -120,7 +136,21 @@ def handler(event, context):
             return response(400, {"message": "objectKey is required"})
         return response(201, {"item": create_receipt(user_id, payload)})
 
-    if method == "GET":
-        return response(200, {"items": list_receipts(user_id)})
+   if method == "GET":
 
-    return response(405, {"message": "Method not allowed"})
+    params = event.get("queryStringParameters") or {}
+
+    mode = params.get("mode", "personal")
+
+    group_id = params.get("groupId")
+
+    return response(
+        200,
+        {
+            "items": list_receipts(
+                user_id,
+                mode,
+                group_id
+            )
+        }
+    )
