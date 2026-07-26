@@ -19,6 +19,11 @@
       <button class="tab-button is-active" type="button" data-view="dashboard">
         <span aria-hidden="true">⌘</span> Dashboard
       </button>
+      <!-- Imports now always navigates straight to import.html (the real,
+           fully-wired Imports UI: drag/drop, S3 presigned upload, Textract+Gemini
+           polling, manual entry, group vs personal mode). The old embedded
+           #importsView tab here was a second, fake, hardcoded UI that never
+           actually round-tripped through the backend - it's been removed. -->
       <button class="tab-button" type="button" data-view="imports">
         <span aria-hidden="true">▣</span> Imports
       </button>
@@ -63,24 +68,6 @@
       <section id="dashboardPanels" class="dashboard-panels" aria-live="polite"></section>
       <section id="topCategories" class="wide-panel"></section>
       <section id="ledgerPanel" class="wide-panel"></section>
-    </section>
-
-    <section id="importsView" class="view" aria-labelledby="importsTitle">
-      <div class="view-title view-title--narrow">
-        <h1 id="importsTitle">Imported Receipts & Invoices</h1>
-        <p>Receipts parsed by Open AI · stored in Amazon S3</p>
-      </div>
-      <section id="dropZone" class="drop-zone" data-upload-state="idle" tabindex="0">
-        <input id="receiptFile" type="file" multiple accept="image/*,.pdf" hidden>
-        <div class="upload-icon">⇧</div>
-        <strong>Drop receipts & invoices here</strong>
-        <p>JPG · PNG · PDF · Open AI parses · stored in S3</p>
-        <div class="chips"><span>S3 Storage</span><span>Open AI OCR</span><span>Lambda Trigger</span></div>
-      </section>
-      <section class="wide-panel imports-list">
-        <div class="panel-kicker">Imported documents · S3 bucket</div>
-        <div id="documentList" aria-live="polite"></div>
-      </section>
     </section>
 
     <section id="analyticsView" class="view" aria-labelledby="analyticsTitle">

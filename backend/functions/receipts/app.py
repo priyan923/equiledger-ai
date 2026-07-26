@@ -73,7 +73,14 @@ def create_receipt(user_id, payload):
 
 
 def list_receipts(user_id, mode="personal", group_id=None):
-
+    # NOTE (Person 2, task 7 flag): this queries only the most recent 50 items
+    # for the user and then filters in Python by groupId/mode. That's fine at
+    # today's scale, but once a user has >50 personal receipts, older group
+    # receipts (or vice versa) can silently fall off the page before the
+    # in-Python filter ever sees them. If that becomes a real problem, either
+    # bump Limit, paginate with LastEvaluatedKey, or add a GSI keyed on
+    # (userId, mode/groupId) so this filter happens in DynamoDB instead of
+    # in Lambda. Leaving as-is for now per the Day 1-7 plan.
     result = table.query(
         KeyConditionExpression="pk = :pk AND begins_with(sk, :prefix)",
         ExpressionAttributeValues={
@@ -136,21 +143,19 @@ def handler(event, context):
             return response(400, {"message": "objectKey is required"})
         return response(201, {"item": create_receipt(user_id, payload)})
 
-   if method == "GET":
+    if method == "GET":
+        params = event.get("queryStringParameters") or {}
+        mode = params.get("mode", "personal")
+        group_id = params.get("groupId")
+        return response(
+            200,
+            {
+                "items": list_receipts(
+                    user_id,
+                    mode,
+                    group_id
+                )
+            }
+        )
 
-    params = event.get("queryStringParameters") or {}
-
-    mode = params.get("mode", "personal")
-
-    group_id = params.get("groupId")
-
-    return response(
-        200,
-        {
-            "items": list_receipts(
-                user_id,
-                mode,
-                group_id
-            )
-        }
-    )
+    return response(405, {"message": "Method not allowed"})

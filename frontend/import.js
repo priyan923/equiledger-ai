@@ -22,6 +22,31 @@
     return fetch(apiUrl(path), { ...options, headers });
   }
 
+  // Posts a resulting transaction to the Ledger table (backend/functions/ledger/app.py).
+  // Called after both a manual save and a successful OCR scan so the Personal
+  // Ledger panel on the dashboard (wired to GET /ledger + GET /activity) is
+  // ever actually populated. Errors here are logged but don't block the
+  // /receipts flow that already succeeded.
+  async function postLedgerEntry({ description, amount, category, account, mode }) {
+    try {
+      const res = await gatewayFetch('/ledger', {
+        method: 'POST',
+        body: JSON.stringify({
+          description: description || 'Untitled transaction',
+          amount: Number(amount) || 0,
+          category: category || 'Uncategorized',
+          account: account || 'You',
+          mode: mode || currentMode()
+        })
+      });
+      if (!res.ok) throw new Error(`Ledger post failed (HTTP ${res.status})`);
+      return await res.json();
+    } catch (e) {
+      console.error('Could not record ledger transaction', e);
+      return null;
+    }
+  }
+
   // --- Core Functionality ---
 
   async function renderDocuments() {
@@ -188,9 +213,22 @@ sessionStorage.setItem(
     'activeBillData',
     JSON.stringify(parsed)
 );
-    
-}
-     
+
+      // In personal mode a scanned receipt is a finished transaction right away
+      // (there's no split/settlement step), so record it straight to the Ledger
+      // now. In group mode the real per-person amounts aren't known until the
+      // Split team's settlement flow finalizes it (backend/functions/split_ledger),
+      // so we intentionally do NOT double-post here for group receipts.
+      if (mode !== 'group') {
+        await postLedgerEntry({
+          description: file.name.replace(/\.[^.]+$/, '') || 'Scanned receipt',
+          amount: parsed.total,
+          category: 'Unsorted',
+          account: 'You',
+          mode
+        });
+      }
+
       // 3. UI Update[cite: 3]
       document.querySelector('#scanDoneSummary').textContent = 
         `${parsed.items?.length || 0} items extracted · ₹${parsed.total}`;
@@ -281,6 +319,18 @@ sessionStorage.setItem(
     }
   }
 
+  // #manualDate used to render a hardcoded "06/22/2025" text value that was
+  // never read anywhere. It's now a real <input type="date">, defaulted here
+  // to today's date, and its value is read and included in the /receipts and
+  // /ledger payloads when the manual entry is saved.
+  function initManualDateDefault() {
+    const dateInput = document.querySelector('#manualDate');
+    if (!dateInput) return;
+    const today = new Date();
+    const iso = today.toISOString().slice(0, 10); // YYYY-MM-DD
+    dateInput.value = iso;
+  }
+
   function initModals() {
     const recordChoice = document.querySelector('#recordChoice');
     const manualOverlay = document.querySelector('#manualOverlay');
@@ -293,6 +343,7 @@ sessionStorage.setItem(
 
     document.querySelector('#chooseManual').addEventListener('click', () => {
       recordChoice.hidden = true;
+      initManualDateDefault();
       manualOverlay.hidden = false;
     });
 
@@ -308,20 +359,30 @@ sessionStorage.setItem(
     document.querySelector('#cancelScan').addEventListener('click', () => { scanOverlay.hidden = true; });
 
     document.querySelector('#saveManualRecord').addEventListener('click', async () => {
+      const description = document.querySelector('#manualDescription').value || 'Manual entry';
+      const category = document.querySelector('#manualCategory').value || 'Other';
+      const amount = Number(document.querySelector('#manualAmount').value) || 0;
+      const date = document.querySelector('#manualDate').value || new Date().toISOString().slice(0, 10);
+      const mode = currentMode();
+      const groupId = mode === 'group' ? sessionStorage.getItem('equiledger.activeGroupId') : null;
+
       const payload = {
         objectKey: `manual/${Date.now()}`,
-        fileName: document.querySelector('#manualDescription').value || 'Manual entry',
-        category: document.querySelector('#manualCategory').value || 'Other',
-        amount: Number(document.querySelector('#manualAmount').value) || 0,
-        mode: currentMode(),
-         groupId:
-        currentMode() === 'group'
-            ? sessionStorage.getItem('equiledger.activeGroupId')
-            : null
+        fileName: description,
+        category,
+        amount,
+        date,
+        mode,
+        groupId
       };
       try {
         const res = await gatewayFetch('/receipts', { method: 'POST', body: JSON.stringify(payload) });
         if (!res.ok) throw new Error(`Save failed (HTTP ${res.status})`);
+
+        // Also record it in the Ledger so it shows up in the Personal Ledger
+        // panel on the dashboard (backend/functions/ledger/app.py::put_transaction).
+        await postLedgerEntry({ description, amount, category, account: 'You', mode });
+
         manualOverlay.hidden = true;
         renderDocuments();
       } catch (e) {
@@ -339,4 +400,5 @@ sessionStorage.setItem(
   renderDocuments();
   initDropzone();
   initModals();
+  initManualDateDefault();
 })();

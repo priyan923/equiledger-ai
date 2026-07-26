@@ -78,7 +78,10 @@
             </select>
           </label>
           <label>Amount<span class="money-input"><b>$</b><input id="manualAmount" inputmode="decimal" placeholder="0.00"></span></label>
-          <label>Date<input id="manualDate" type="text" value="06/22/2025"></label>
+          <!-- Was a hardcoded text value (06/22/2025) that import.js never read.
+               Now a real date input, defaulted to today's date by import.js on load,
+               and included in the /receipts + /ledger payloads. -->
+          <label>Date<input id="manualDate" type="date"></label>
           <label>Description<textarea id="manualDescription" placeholder="Enter details manually..."></textarea></label>
         </form>
       </div>

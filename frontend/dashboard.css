@@ -312,16 +312,14 @@ p { color: var(--muted); font-size: 20px; }
 .bar-track span { display: block; height: 100%; background: currentColor; }
 
 .ledger-table,
-.activity-list,
-.document-row {
+.activity-list {
   width: 100%;
   border-collapse: collapse;
 }
 
 .ledger-head,
 .ledger-row,
-.activity-row,
-.document-row {
+.activity-row {
   display: grid;
   grid-template-columns: 160px 1.4fr 1fr 1fr 1fr 1fr;
   align-items: center;
@@ -382,27 +380,6 @@ p { color: var(--muted); font-size: 20px; }
   background: var(--raised);
   font-weight: 900;
 }
-
-.drop-zone {
-  max-width: 1280px;
-  min-height: 220px;
-  display: grid;
-  place-items: center;
-  align-content: center;
-  margin: 0 auto 20px;
-  border: 2px dashed #3a3834;
-  background: var(--panel);
-  text-align: center;
-}
-
-.drop-zone.is-over { border-color: var(--pink); }
-.upload-icon { width: 54px; height: 54px; display: grid; place-items: center; margin-bottom: 16px; border-radius: 50%; background: var(--raised); font-size: 26px; }
-.drop-zone p { margin: 8px 0 14px; font-size: 12px; }
-.chips { display: flex; gap: 8px; }
-.chips span { padding: 5px 9px; background: #20231f; color: #e9efe3; font-size: 11px; }
-.imports-list { max-width: 1280px; margin-inline: auto; }
-.document-row { grid-template-columns: 38px 1fr auto auto auto; padding: 18px 0; }
-.doc-icon { width: 34px; height: 34px; display: grid; place-items: center; background: var(--raised); }
 
 .analytics-grid {
   display: grid;
@@ -465,7 +442,7 @@ p { color: var(--muted); font-size: 20px; }
   .tab-button { min-width: 140px; font-size: 15px; }
   .header-actions { flex-wrap: wrap; }
   .metric-grid { grid-template-columns: 1fr; }
-  .ledger-head, .ledger-row, .document-row { grid-template-columns: 1fr; gap: 8px; padding: 16px 0; }
+  .ledger-head, .ledger-row { grid-template-columns: 1fr; gap: 8px; padding: 16px 0; }
   h1 { font-size: 26px; }
 }
 .group-modal{

@@ -2,311 +2,219 @@
   'use strict';
 
   if (typeof AmazonConfig === 'undefined') {
-      console.error("Critical Error: config.js is missing.");
-      alert("Application Configuration Missing! Ensure config.js exists.");
-      return; 
+    console.error("Critical Error: config.js is missing.");
+    alert("Application Configuration Missing! Ensure config.js exists.");
+    return;
   }
 
-  const API_CONFIG = {
-    baseUrl: AmazonConfig.API_GATEWAY_URL
-  };
-
-  const fallbackBill = {
-    groupId: 'trip-to-goa',
-    receiptId: 'restaurant-goa-jun20',
-    subtotal: 1260,
-    taxes: 63,
-    total: 1323,
-    items: [
-      { id: 'pizza', emoji: '🍕', name: 'Margherita Pizza', amount: 350 },
-      { id: 'garlic', emoji: '🥖', name: 'Garlic Bread', amount: 120 },
-      { id: 'pasta', emoji: '🍝', name: 'Pasta Arrabbiata', amount: 300 },
-      { id: 'drink', emoji: '🥤', name: 'Cold Drink', amount: 120 },
-      { id: 'burger', emoji: '🍔', name: 'Chicken Burger', amount: 220 },
-      { id: 'fries', emoji: '🍟', name: 'Cheese Fries', amount: 150 }
-    ]
-  };
-
-  let friends = [];
-
-const groupData = JSON.parse(
-    sessionStorage.getItem("equiledger.activeGroup") || "null"
-);
-
-if (groupData && groupData.members) {
-
-    friends = groupData.members.map(name => ({
-        id: name.toLowerCase().replace(/\s+/g, "-"),
-        name,
-        initials: name.substring(0,2).toUpperCase(),
-        color: "blue"
-    }));
-
-}
-
-  const payerId = friends.length ? friends[0].id : "";
-  const bill = JSON.parse(sessionStorage.getItem('equiledger.parsedBill') || 'null') || fallbackBill;
-  const selectedGroup =
-    sessionStorage.getItem('equiledger.selectedGroup');
-
-if (groupData) {
-    bill.groupId = groupData.groupId;
-}
-
-if (groupData && !sessionStorage.getItem('equiledger.activeGroupId')) {
-    sessionStorage.setItem(
-        'equiledger.activeGroupId',
-        groupData.groupId
-    );
-}
-
-  const assignments = bill.items.map(item => ({ itemId: item.id, friendIds: [] }));
-  let activeFriendId = 'aman';
-  let finalPayload = null;
-
-  const rupee = value => `₹${Math.round(value)}`;
+  const API_CONFIG = { baseUrl: AmazonConfig.API_GATEWAY_URL };
   const token = () => sessionStorage.getItem('equiledger.idToken') || '';
-  function getItem(id) {
-    return bill.items.find(item => item.id === id);
+
+  function apiUrl(path) {
+    return `${API_CONFIG.baseUrl.replace(/\/$/, '')}${path}`;
   }
 
-  function getAssignment(itemId) {
-    return assignments.find(entry => entry.itemId === itemId);
-  }
-
-  function assignedItemsFor(friendId) {
-    return assignments.filter(entry => entry.friendIds.includes(friendId)).map(entry => getItem(entry.itemId));
-  }
-
-  function baseShareFor(friendId) {
-    return assignments.reduce((sum, entry) => {
-      if (!entry.friendIds.includes(friendId) || entry.friendIds.length === 0) return sum;
-      return sum + (getItem(entry.itemId).amount / entry.friendIds.length);
-    }, 0);
-  }
-
-  function finalBalanceFor(friendId) {
-    const taxRatio =
-    bill.subtotal > 0
-        ? bill.taxes / bill.subtotal
-        : 0;
-    return baseShareFor(friendId) * (1 + taxRatio);
-  }
-
-  function claimedBaseTotal() {
-    return assignments.reduce((sum, entry) => {
-      if (!entry.friendIds.length) return sum;
-      return sum + getItem(entry.itemId).amount;
-    }, 0);
-  }
-
-  function claimedCount() {
-    return assignments.filter(entry => entry.friendIds.length).length;
-  }
-
-  function renderFriends() {
-    document.querySelector('#friendCards').innerHTML = friends.map(friend => {
-      const base = baseShareFor(friend.id);
-      const selected = activeFriendId === friend.id;
-      const subtitle = base > 0 ? rupee(base) : 'Nothing selected';
-      return `
-        <button class="friend-card ${selected ? 'is-active' : ''}" data-id="${friend.id}" data-color="${friend.color}" type="button">
-          <span class="avatar">${friend.initials}</span>
-          <span><strong>${friend.name}</strong>${selected ? '<b class="active-pill">Active</b>' : ''}<br><small>${subtitle}</small></span>
-        </button>
-      `;
-    }).join('');
-
-    document.querySelectorAll('.friend-card').forEach(card => {
-      card.addEventListener('click', () => {
-        activeFriendId = card.dataset.id;
-        render();
-      });
-    });
-  }
-
-  function renderItems() {
-    const activeFriend = friends.find(friend => friend.id === activeFriendId);
-    document.querySelector('#activePrompt').textContent = `${activeFriend.name}, tap your items below`;
-    document.querySelector('#itemGrid').innerHTML = bill.items.map(item => {
-      const assignment = getAssignment(item.id);
-      const primaryOwner = assignment.friendIds[assignment.friendIds.length - 1] || '';
-      const chips = assignment.friendIds.length
-        ? assignment.friendIds.map(id => `<span class="owner-chip">${friends.find(friend => friend.id === id).name}</span>`).join(' ')
-        : '<span class="owner-chip"></span>';
-      return `
-        <button class="item-row" data-id="${item.id}" ${primaryOwner ? `data-owner="${primaryOwner}"` : ''} type="button">
-          <span class="item-emoji">${item.emoji}</span>
-          <span><h2>${item.name}</h2><strong>${rupee(item.amount)}</strong><br>${chips}</span>
-          <small>${rupee(item.amount)}</small>
-          <span class="check">✓</span>
-        </button>
-      `;
-    }).join('');
-
-    document.querySelectorAll('.item-row').forEach(row => {
-      row.addEventListener('click', () => toggleItem(row.dataset.id));
-    });
-  }
-
-  function toggleItem(itemId) {
-    const assignment = getAssignment(itemId);
-    const existingIndex = assignment.friendIds.indexOf(activeFriendId);
-    if (existingIndex >= 0) {
-      assignment.friendIds.splice(existingIndex, 1);
-    } else {
-      assignment.friendIds.push(activeFriendId);
-    }
-    render();
-  }
-
-  function renderFooter() {
-    const count = claimedCount();
-    const totalItems = bill.items.length;
-    document.querySelector('#claimedCount').textContent = `${count}/${totalItems} items claimed`;
-    document.querySelector('#progressBar').style.width = `${(count / totalItems) * 100}%`;
-    document.querySelector('#claimedTotal').textContent = rupee(claimedBaseTotal());
-    document.querySelector('#unclaimedText').textContent = `${totalItems - count} items unclaimed`;
-    document.querySelector('#finalizeSplit').classList.toggle('is-ready', count === totalItems);
-  }
-
-  function render() {
-    renderFriends();
-    renderItems();
-    renderFooter();
-  }
-
-  function buildSettlementPayload() {
-    const taxRatio =
-    bill.subtotal > 0
-        ? bill.taxes / bill.subtotal
-        : 0;
-    const balances = friends.map(friend => {
-      const items = assignedItemsFor(friend.id).map(item => {
-        const assignment = getAssignment(item.id);
-        return {
-          id: item.id,
-          name: item.name,
-          emoji: item.emoji,
-          baseAmount: item.amount,
-          sharedBy: assignment.friendIds,
-          claimedShare: item.amount / assignment.friendIds.length
-        };
-      });
-      const baseSubtotal = baseShareFor(friend.id);
-      const taxShare = baseSubtotal * taxRatio;
-      const finalBalance = baseSubtotal + taxShare;
-      return {
-        friendId: friend.id,
-        name: friend.name,
-        initials: friend.initials,
-        color: friend.color,
-        items,
-        baseSubtotal,
-        taxShare,
-        finalBalance,
-        payer: friend.id === payerId
-      };
-    });
-
-    return {
-      groupId: bill.groupId,
-      receiptId: bill.receiptId,
-      payerId,
-      subtotal: bill.subtotal,
-      taxes: bill.taxes,
-      total: bill.total,
-      assignments: assignments.map(entry => ({
-        itemId: entry.itemId,
-        friendIds: [...entry.friendIds]
-      })),
-      balances,
-      createdAt: new Date().toISOString()
+  async function apiFetch(path, options = {}) {
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token()}`,
+      ...(options.headers || {})
     };
+    return fetch(apiUrl(path), { ...options, headers });
   }
 
-  function renderSettlement() {
-    finalPayload = buildSettlementPayload();
-    document.querySelector('#splitScreen').hidden = true;
-    document.querySelector('#settlementScreen').hidden = false;
-    document.querySelector('#settlementGrand').textContent = rupee(finalPayload.total);
-    document.querySelector('#settlementSubtotal').textContent = rupee(finalPayload.subtotal);
-    document.querySelector('#settlementTax').textContent = rupee(finalPayload.taxes);
+  const rupee = value => `₹${Math.round(Number(value) || 0)}`;
 
-    document.querySelector('#settlementRows').innerHTML = finalPayload.balances.map(balance => `
-      <article class="settlement-row" data-person="${balance.friendId}">
-        <span class="avatar">${balance.initials}</span>
-        <div>
-          <h2>${balance.name}</h2>
-          <div>${balance.items.map(item => `<span class="item-pill">${item.emoji} ${item.name}</span>`).join('')}</div>
-          <p class="settlement-note">Items: ${rupee(balance.baseSubtotal)} + GST share: ${rupee(balance.taxShare)}</p>
+  const groupId = sessionStorage.getItem('equiledger.activeGroupId');
+
+  let group = null;
+  let expenses = [];
+
+  if (!groupId) {
+    alert('No group selected. Returning to dashboard.');
+    window.location.assign('./dashboard.html');
+    return;
+  }
+
+  async function loadGroup() {
+    const res = await apiFetch(`/groups/${encodeURIComponent(groupId)}`);
+    if (!res.ok) throw new Error(`Could not load group (HTTP ${res.status})`);
+    group = await res.json();
+  }
+
+  async function loadExpenses() {
+    const res = await apiFetch(`/expenses?groupId=${encodeURIComponent(groupId)}`);
+    if (!res.ok) throw new Error(`Could not load expenses (HTTP ${res.status})`);
+    const data = await res.json();
+    expenses = data.items || [];
+  }
+
+  function computeBalances() {
+    const members = group.members || [];
+    const net = {};
+    members.forEach(m => { net[m] = 0; });
+
+    expenses.forEach(expense => {
+      const amount = Number(expense.amount) || 0;
+      const share = members.length ? amount / members.length : 0;
+      members.forEach(m => {
+        net[m] = (net[m] || 0) - share;
+      });
+      if (expense.paidBy in net) {
+        net[expense.paidBy] += amount;
+      } else {
+        net[expense.paidBy] = amount;
+      }
+    });
+
+    return net;
+  }
+
+  function renderGroupHeader() {
+    document.querySelector('#groupTitle').textContent = group.groupName;
+    document.querySelector('#groupSubtitle').textContent =
+      `${(group.members || []).length} member(s) · ${expenses.length} expense(s)`;
+  }
+
+  function renderMembers() {
+    document.querySelector('#memberCards').innerHTML = (group.members || []).map(name => `
+      <div class="friend-card">
+        <span class="avatar">${name.substring(0, 2).toUpperCase()}</span>
+        <span><strong>${name}</strong></span>
+      </div>
+    `).join('');
+  }
+
+  function renderBalances() {
+    const net = computeBalances();
+    document.querySelector('#balanceList').innerHTML = Object.entries(net).map(([name, value]) => {
+      const cls = value > 0 ? 'positive' : value < 0 ? 'negative' : '';
+      const label = value > 0 ? 'is owed' : value < 0 ? 'owes' : 'is settled';
+      return `
+        <div class="item-row">
+          <span class="item-emoji">👤</span>
+          <span><h2>${name}</h2><small>${label}</small></span>
+          <strong class="${cls}">${rupee(Math.abs(value))}</strong>
         </div>
-        <div class="amount">${rupee(balance.finalBalance)}<p>${balance.payer ? 'paid full bill' : `owes Aman ${rupee(balance.finalBalance)}`}</p></div>
-      </article>
+      `;
+    }).join('');
+  }
+
+  function renderExpenses() {
+    document.querySelector('#expenseList').innerHTML = expenses.map(expense => `
+      <div class="activity-row">
+        <span class="initials">${(expense.paidBy || '?').substring(0, 2).toUpperCase()}</span>
+        <div>
+          <strong>${expense.description}</strong>
+          <p>Paid by ${expense.paidBy} · split equally</p>
+        </div>
+        <strong>${rupee(expense.amount)}</strong>
+        <button type="button" data-sk="${expense.sk}" class="delete-expense">✕</button>
+      </div>
     `).join('');
 
-    const settlementLines = finalPayload.balances
-      .filter(balance => balance.friendId !== payerId && balance.finalBalance > 0)
-      .map(balance => `<div class="summary-line"><span>${balance.name} <b>→</b> Aman</span><strong>${rupee(balance.finalBalance)}</strong></div>`);
-
-    document.querySelector('#settlementSummary').innerHTML = settlementLines.join('');
+    document.querySelectorAll('.delete-expense').forEach(btn => {
+      btn.addEventListener('click', () => deleteExpense(btn.dataset.sk));
+    });
   }
 
-  function buildDashboardDocumentRow() {
-    const payerName = friends.find(friend => friend.id === payerId).name;
-    return [
-      `${(finalPayload.receiptId || 'group-receipt').replace(/\s+/g, '_')}.jpg`,
-      `Shore Bistro, Goa · Paid by ${payerName}`,
-      `${groupData.groupName} · Group`,
-      'Parsed',
-      `$${finalPayload.total}`
-    ];
+  function populatePaidBySelect() {
+    document.querySelector('#expensePaidBy').innerHTML = (group.members || [])
+      .map(name => `<option value="${name}">${name}</option>`)
+      .join('');
   }
 
-  async function commitLedger() {
-    if (!finalPayload) finalPayload = buildSettlementPayload();
+  function renderAll() {
+    renderGroupHeader();
+    renderMembers();
+    renderBalances();
+    renderExpenses();
+    populatePaidBySelect();
+  }
 
-    const isLiveApi = !API_CONFIG.baseUrl.includes('YOUR_API');
-    if (isLiveApi) {
-      const response = await fetch(`${API_CONFIG.baseUrl.replace(/\/$/, '')}/groups/${finalPayload.groupId}/splits`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token()}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(finalPayload)
-      });
-      if (!response.ok) throw new Error(`Ledger commit failed with ${response.status}`);
+  async function refresh() {
+    await loadExpenses();
+    renderAll();
+  }
+
+  async function saveExpense() {
+    const description = document.querySelector('#expenseDescription').value.trim();
+    const amount = Number(document.querySelector('#expenseAmount').value);
+    const paidBy = document.querySelector('#expensePaidBy').value;
+    const splitType = document.querySelector('#expenseSplitType').value;
+
+    if (!description || !amount || !paidBy) {
+      alert('Please fill in description, amount, and who paid.');
+      return;
     }
 
-    document.querySelector('#settlementScreen').hidden = true;
-    sessionStorage.removeItem('equiledger.parsedBill');
-    sessionStorage.removeItem('activeBillData');
-    document.querySelector('#savedScreen').hidden = false;
+    try {
+      const res = await apiFetch('/expenses', {
+        method: 'POST',
+        body: JSON.stringify({ groupId, description, amount, paidBy, splitType })
+      });
+      if (!res.ok) throw new Error(`Save failed (HTTP ${res.status})`);
+
+      document.querySelector('#expenseDescription').value = '';
+      document.querySelector('#expenseAmount').value = '';
+      document.querySelector('#addExpenseOverlay').hidden = true;
+
+      await refresh();
+    } catch (err) {
+      console.error(err);
+      alert('Could not save expense. Check API Gateway/DynamoDB connectivity.');
+    }
   }
 
-  function init() {
-    document.querySelector('#finalizeSplit').addEventListener('click', renderSettlement);
-    document.querySelector('#discardSettlement').addEventListener('click', () => {
-      document.querySelector('#settlementScreen').hidden = true;
-      document.querySelector('#splitScreen').hidden = false;
-    });
-    document.querySelector('#saveLedger').addEventListener('click', () => {
-      commitLedger().catch(error => {
-        console.error(error);
-        alert('Unable to save ledger. Check API Gateway, Cognito token, and DynamoDB permissions.');
+  async function deleteExpense(sk) {
+    if (!sk) return;
+    if (!confirm('Delete this expense?')) return;
+    try {
+      const res = await apiFetch('/expenses', {
+        method: 'DELETE',
+        body: JSON.stringify({ groupId, sk })
       });
+      if (!res.ok) throw new Error(`Delete failed (HTTP ${res.status})`);
+      await refresh();
+    } catch (err) {
+      console.error(err);
+      alert('Could not delete expense.');
+    }
+  }
+
+  function initModal() {
+    document.querySelector('#addExpenseBtn').addEventListener('click', () => {
+      document.querySelector('#addExpenseOverlay').hidden = false;
     });
+    document.querySelector('#closeAddExpense').addEventListener('click', () => {
+      document.querySelector('#addExpenseOverlay').hidden = true;
+    });
+    document.querySelector('#cancelAddExpense').addEventListener('click', () => {
+      document.querySelector('#addExpenseOverlay').hidden = true;
+    });
+    document.querySelector('#saveExpense').addEventListener('click', saveExpense);
+  }
+
+  function initNav() {
     document.querySelector('#backToDashboard').addEventListener('click', () => {
-      // Group mode stays active so the dashboard reopens on the Group view,
-      // and the freshly-finalized split appears immediately in Imports/Ledger.
       sessionStorage.setItem('equiledger.mode', 'group');
-      if (finalPayload) {
-        sessionStorage.setItem('equiledger.newDocuments', JSON.stringify([buildDashboardDocumentRow()]));
-      }
       window.location.assign('./dashboard.html');
     });
-    render();
+  }
+
+  async function init() {
+    try {
+      await loadGroup();
+      await loadExpenses();
+      renderAll();
+    } catch (err) {
+      console.error(err);
+      alert('Could not load this group. Returning to dashboard.');
+      window.location.assign('./dashboard.html');
+      return;
+    }
+    initModal();
+    initNav();
   }
 
   init();

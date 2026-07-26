@@ -22,16 +22,22 @@
 
   let isGroupModeActive = readStoredMode();
 
+  // NOTE: state.documents, renderDocuments(), handleFiles(), and requestUpload()
+  // used to live here, rendering a second, fake, hardcoded "Imports" list that
+  // only partially POSTed to /receipts and never actually read the real list
+  // back. That whole embedded #importsView UI + its dead JS has been removed.
+  // frontend/import.html + import.js is the one real Imports implementation
+  // (full drag/drop, S3 presigned upload, Textract+Gemini polling, manual
+  // entry, group vs personal mode) - the Imports nav tab below now just
+  // navigates there.
+  //
+  // Group-mode budget/savingsGoal figures below are still illustrative/demo
+  // values - there's no backend concept of a "group budget" yet (that's a
+  // Person 1/3 concern for group balances, not part of the Ledger/Imports
+  // wiring owned here). Personal-mode numbers are wired to the real
+  // GET /ledger and GET /activity endpoints instead of being hardcoded.
   const state = {
-    personal: { budget: 10842.45, spent: 2340, savingsGoal: 1842 },
     group: { budget: 18560, spent: 10320, savingsGoal: 3120 },
-    documents: [
-      ['Whole_Foods_Jun20.jpg', 'Whole Foods Market · Jun 20', 'Groceries', 'Parsed', 84.32],
-      ['AWS_Invoice_Jun16.pdf', 'Amazon Web Services · Jun 16', 'Dev Tools', 'Parsed', 9.18],
-      ['Barcelona_Airbnb.pdf', 'Airbnb · Jun 15', 'Travel', 'Processing...', 340.00],
-      ['Restaurant_Goa.jpg', 'Shore Bistro, Goa · Jun 20', 'Dining · Group', 'Parsed', 1323.00],
-      ['Chipotle_Jun17.jpg', 'Chipotle via Uber Eats · Jun 17', '', 'Error', 32.47]
-    ],
     categories: [
       ['Groceries', 28, '#ead2d0'],
       ['Dining', 22, '#c8cec0'],
@@ -41,6 +47,11 @@
       ['Other', 10, '#454341']
     ]
   };
+
+  // Cache of the most recent real ledger data so renderMetrics()/renderLedger()
+  // can be called independently of the async fetch that populates them.
+  let personalLedgerData = { items: [], totals: { spent: 0, income: 0 } };
+  let personalActivityData = [];
 
   const money = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 });
   const dollar = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
@@ -111,33 +122,83 @@
   );
 }
 
+  // --- Real Ledger + Activity data (backend/functions/ledger/app.py) ---
+
+  async function fetchLedger() {
+    try {
+      const res = await apiFetch('/ledger');
+      if (!res.ok) throw new Error(`GET /ledger failed (HTTP ${res.status})`);
+      const data = await res.json();
+      const totals = data.totals || {};
+      return {
+        items: data.items || [],
+        totals: {
+          spent: Number(totals.spent) || 0,
+          income: Number(totals.income) || 0
+        }
+      };
+    } catch (err) {
+      console.error('Could not load ledger', err);
+      return { items: [], totals: { spent: 0, income: 0 } };
+    }
+  }
+
+  async function fetchActivity() {
+    try {
+      const res = await apiFetch('/activity');
+      if (!res.ok) throw new Error(`GET /activity failed (HTTP ${res.status})`);
+      const data = await res.json();
+      return data.items || [];
+    } catch (err) {
+      console.error('Could not load activity feed', err);
+      return [];
+    }
+  }
+
+  async function loadPersonalLedgerData() {
+    const [ledger, activity] = await Promise.all([fetchLedger(), fetchActivity()]);
+    personalLedgerData = ledger;
+    personalActivityData = activity;
+  }
+
   function currentMode() {
-    const key = isGroupModeActive ? 'group' : 'personal';
-    const values = state[key];
-    return {
-      key,
-      budget: values.budget,
-      spent: values.spent,
-      savingsGoal: values.savingsGoal,
-      leftPool: values.budget - values.spent - values.savingsGoal
-    };
+    return { key: isGroupModeActive ? 'group' : 'personal' };
   }
 
   function renderMetrics() {
-    const mode = currentMode();
-    const prefix = isGroupModeActive ? 'Group' : 'Personal';
-    const format = isGroupModeActive ? money.format : dollar.format;
-    const cards = [
-      [`Total ${prefix} Budget`, format(mode.budget), 'Monthly envelope'],
-      [`${prefix} Spent Amount`, format(mode.spent), isGroupModeActive ? 'Combined expenses' : 'All accounts'],
-      [`${prefix} Savings Goal`, format(mode.savingsGoal), 'June target'],
-      [`${prefix} Savings Left Pool`, format(mode.leftPool), 'Budget - spent - goal']
-    ];
+    if (isGroupModeActive) {
+      // Group budget tracking isn't backed by a real endpoint yet - left as
+      // illustrative demo numbers, out of scope for the Ledger/Imports wiring.
+      const g = state.group;
+      const cards = [
+        ['Total Group Budget', money.format(g.budget), 'Monthly envelope'],
+        ['Group Spent Amount', money.format(g.spent), 'Combined expenses'],
+        ['Group Savings Goal', money.format(g.savingsGoal), 'June target'],
+        ['Group Savings Left Pool', money.format(g.budget - g.spent - g.savingsGoal), 'Budget - spent - goal']
+      ];
+      document.querySelector('#metricGrid').innerHTML = cards.map(([label, value, sub], index) => `
+        <article class="metric-card">
+          <span>${label}</span>
+          <strong class="${index === 1 ? 'negative' : index === 3 ? 'positive' : ''}">${value}</strong>
+          <p>${sub}</p>
+        </article>
+      `).join('');
+      return;
+    }
 
+    // Personal mode: real numbers from GET /ledger's totals.
+    const { spent, income } = personalLedgerData.totals;
+    const net = income - spent;
+    const cards = [
+      ['Total Spent', dollar.format(spent), 'From your ledger'],
+      ['Total Income', dollar.format(income), 'From your ledger'],
+      ['Net Balance', dollar.format(net), 'Income − spent'],
+      ['Logged Transactions', String(personalLedgerData.items.length), 'Most recent 50']
+    ];
     document.querySelector('#metricGrid').innerHTML = cards.map(([label, value, sub], index) => `
       <article class="metric-card">
         <span>${label}</span>
-        <strong class="${index === 1 ? 'negative' : index === 3 ? 'positive' : ''}">${value}</strong>
+        <strong class="${index === 0 ? 'negative' : index === 2 ? (net >= 0 ? 'positive' : 'negative') : ''}">${value}</strong>
         <p>${sub}</p>
       </article>
     `).join('');
@@ -188,22 +249,27 @@
     document.querySelector('#dashboardPanels').innerHTML = `
       <article class="panel">
         <div class="panel-kicker">Balance overview</div>
-        <h2>$6,892<small>.45</small></h2>
-        <p>Total balance · all accounts</p>
+        <h2>${dollar.format(personalLedgerData.totals.income - personalLedgerData.totals.spent)}</h2>
+        <p>Net balance · from your ledger</p>
         <div class="split-stats">
-          <div><span class="sub-label">Expenses</span><strong class="pink">$2,340</strong></div>
-          <div><span class="sub-label">Left</span><strong class="positive">$2,710</strong></div>
-          <div><span class="sub-label">Savings</span><strong>$1,842</strong></div>
+          <div><span class="sub-label">Expenses</span><strong class="pink">${dollar.format(personalLedgerData.totals.spent)}</strong></div>
+          <div><span class="sub-label">Income</span><strong class="positive">${dollar.format(personalLedgerData.totals.income)}</strong></div>
+          <div><span class="sub-label">Transactions</span><strong>${personalLedgerData.items.length}</strong></div>
         </div>
-        <p class="sub-label">Savings Goal <b class="pink" style="float:right">30% / mo</b></p>
-        <div class="progress"><span></span></div>
       </article>
       <article class="panel">
-        <div class="panel-kicker">Monthly velocity</div>
-        <h2>$2,340</h2>
-        <p class="positive">↘ -8.4% vs last month</p>
-        <svg class="sparkline" viewBox="0 0 520 132"><path d="M0 72 C80 62 110 62 160 74 S240 78 285 54 S390 68 520 88" fill="none" stroke="#ead2d0" stroke-width="3"/><path d="M0 72 C80 62 110 62 160 74 S240 78 285 54 S390 68 520 88 L520 132 L0 132 Z" fill="rgba(234,210,208,.10)"/></svg>
-        <div class="split-stats"><div><span class="sub-label">Avg / Day</span><strong>$75.50</strong></div><div></div><div><span class="sub-label">Projected</span><strong>$2,265</strong></div></div>
+        <div class="panel-kicker">Recent activity</div>
+        ${
+          personalActivityData.length
+            ? personalActivityData.slice(0, 5).map(entry => `
+              <div class="ai-box">
+                <strong>${entry.title || 'Untitled'}</strong> · ${entry.category || 'Uncategorized'}
+                <br><span class="sub-label">${entry.createdAt ? new Date(entry.createdAt * 1000).toLocaleDateString() : ''}</span>
+                <strong style="float:right">${dollar.format(Number(entry.amount) || 0)}</strong>
+              </div>
+            `).join('')
+            : '<p>No recent activity yet. Log a transaction to see it here.</p>'
+        }
       </article>
       <article class="panel" style="display: flex; flex-direction: column;">
         <div class="panel-kicker">Gemini Assistant <b class="positive" style="float:right">● live</b></div>
@@ -260,30 +326,27 @@
     document.querySelector('#topCategories').innerHTML = `<div class="panel-kicker">Top categories · Gemini <span style="float:right">↯</span></div><div class="category-layout"><div class="donut"></div><div class="category-legend">${items}</div></div>`;
   }
 
+  // Personal Ledger panel - now backed by real GET /ledger items instead of
+  // three hardcoded rows.
   function renderLedger() {
+    const rows = personalLedgerData.items.slice(0, 25).map(item => ledgerRow(
+      item.createdAt ? new Date(item.createdAt * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—',
+      item.description || 'Untitled',
+      item.category || 'Uncategorized',
+      item.account || 'You',
+      dollar.format(Number(item.amount) || 0),
+      (Number(item.amount) || 0) < 0
+    )).join('');
+
     document.querySelector('#ledgerPanel').innerHTML = `
       <h2>Personal Ledger <button class="record-button" style="float:right;width:208px;height:48px">⇩ This Month⌄</button></h2>
       <div class="ledger-head"><span>Date</span><span>Description</span><span>Category</span><span>Account</span><span>Status</span><span>Amount</span></div>
-      ${ledgerRow('Jun 20', 'Whole Foods Market', 'Groceries', 'You', '$84.32', false)}
-      ${ledgerRow('Jun 19', 'Netflix', 'Entertainment', 'You', '$15.99', false)}
-      ${ledgerRow('Jun 18', 'Salary Deposit', 'Income', 'You', '+$4200.00', true)}
+      ${rows || '<p>No transactions logged yet.</p>'}
     `;
   }
 
   function ledgerRow(date, description, category, account, amount, positive) {
     return `<div class="ledger-row"><span>${date}</span><strong>${description}</strong><span class="badge">${category}</span><span><span class="initials" style="width:32px;height:32px;display:inline-grid;font-size:12px">YO</span> ${account}</span><span class="status">◎ Cleared</span><strong class="${positive ? 'positive' : ''}">${amount}</strong></div>`;
-  }
-
-  function renderDocuments() {
-    document.querySelector('#documentList').innerHTML = state.documents.map(([name, meta, category, status, amount]) => `
-      <div class="document-row">
-        <span class="doc-icon">▣</span>
-        <div><strong>${name}</strong><p>${meta}</p></div>
-        <span class="badge">${category}</span>
-        <span class="${status === 'Error' ? 'negative' : status === 'Processing...' ? '' : 'positive'}">${status === 'Error' ? '⊗' : '◎'} ${status}</span>
-        <strong>${dollar.format(amount)}</strong>
-      </div>
-    `).join('');
   }
 
   function renderCategoryBars() {
@@ -294,7 +357,7 @@
     `).join('');
   }
 
-  function updateMode() {
+  async function updateMode() {
 
     writeStoredMode(isGroupModeActive);
 
@@ -312,6 +375,10 @@
     subtitle.textContent = isGroupModeActive
         ? "June 2025 · Group Workspace · Gemini"
         : "June 2025 · Personal View · Gemini";
+
+    if (!isGroupModeActive) {
+        await loadPersonalLedgerData();
+    }
 
     renderMetrics();
 
@@ -348,42 +415,126 @@
     document.querySelectorAll('.tab-button').forEach(btn => btn.classList.toggle('is-active', btn.dataset.view === view));
   }
 
-  function consumeIncomingEntries() {
-    const raw = sessionStorage.getItem('equiledger.newDocuments');
-    if (!raw) return;
-    sessionStorage.removeItem('equiledger.newDocuments');
-    try {
-      const incoming = JSON.parse(raw);
-      incoming.forEach(doc => state.documents.unshift(doc));
-    } catch (err) {
-      console.error('Could not parse incoming documents', err);
+  function init() {
+    if (!token()) {
+      console.warn('No Cognito access token found. Keep this redirect in production; comment it during local UI work.');
+      // window.location.replace('./index.html');
     }
-  }
 
-  function handleFiles(files) {
-    Array.from(files).forEach(file => {
-      state.documents.unshift([file.name, `${Math.round(file.size / 1024)} KB · pending upload`, 'Unsorted', 'Processing...', 0]);
+    document.querySelectorAll('.tab-button').forEach(btn => btn.addEventListener('click', () => {
+      // Imports no longer has an embedded view on the dashboard - it always
+      // navigates to the real Imports page (frontend/import.html).
+      if (btn.dataset.view === 'imports') {
+        window.location.assign('./import.html');
+        return;
+      }
+      showView(btn.dataset.view);
+    }));
+    document.querySelector('#modeToggle').addEventListener('click', () => { isGroupModeActive = !isGroupModeActive; updateMode(); });
+    document.querySelector('#profileButton').addEventListener('click', () => {
+      const menu = document.querySelector('#profileMenu');
+      menu.hidden = !menu.hidden;
+      document.querySelector("#profileButton")
+      .setAttribute(
+          "aria-expanded",
+          String(!menu.hidden)
+      );
     });
-    renderDocuments();
-    if (!API_CONFIG.baseUrl.includes('YOUR_API')) {
-      Array.from(files).forEach(file => requestUpload(file));
+
+    document.querySelector('#logoutButton').addEventListener('click', () => { sessionStorage.clear(); window.location.assign('./index.html'); });
+    document.querySelector("#closeGroupModal")?.addEventListener("click", () => {
+    document.querySelector("#groupModal").hidden = true;
+    document.querySelector("#createGroupForm").hidden = true;
+    document.querySelector("#groupList").hidden = false;
+    document.querySelector("#newGroupButton").hidden = false;
+});
+    
+    document.querySelector("#newGroupButton")
+    .addEventListener("click", () => {
+    
+        document.querySelector("#groupList").hidden = true;
+        document.querySelector("#newGroupButton").hidden = true;
+    
+        document.querySelector("#createGroupForm").hidden = false;
+    
+    });
+    document.querySelector('#settingsButton')?.addEventListener('click', () => {
+      // Placeholder until settings page is implemented
+      alert('Settings page will be available in the next update.');
+    });
+
+    document.querySelector('#recordButton').addEventListener('click', async () => {
+        // Personal Expense Tracker
+  if (!isGroupModeActive) {
+    window.location.assign("./import.html");
+    return;
+ }
+   try {
+        const groups = await loadGroups();
+        openGroupSelector(groups);
+    } catch (err) {
+        console.error(err);
+        alert("Unable to load groups.");
     }
+
+    });
+
+    renderCategoryBars();
+    loadUserProfile();
+    updateMode();
   }
 
-  async function requestUpload(file) {
-    try {
-      const res = await apiFetch('/receipts/upload-url', {
-        method: 'POST',
-        body: JSON.stringify({ fileName: file.name, contentType: file.type || 'application/octet-stream' })
-      });
-      const { uploadUrl, objectKey } = await res.json();
-      await fetch(uploadUrl, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file });
-      await apiFetch('/receipts', { method: 'POST', body: JSON.stringify({ objectKey, fileName: file.name }) });
-    } catch (err) {
-      console.error('Receipt upload failed', err);
+  async function createGroup() {
+
+    const groupName = document
+        .querySelector("#groupNameInput")
+        .value
+        .trim();
+
+    const members = document
+        .querySelector("#groupMembersInput")
+        .value
+        .split(",")
+        .map(x => x.trim())
+        .filter(Boolean);
+
+    if (!groupName) {
+        alert("Please enter a group name.");
+        return;
     }
-  }
-function openGroupSelector(groups) {
+
+    try {
+
+        const response = await apiFetch("/groups", {
+            method: "POST",
+            body: JSON.stringify({
+                groupName,
+                members
+            })
+        });
+
+        if (!response.ok) {
+            alert("Failed to create group.");
+            return;
+        }
+
+        document.querySelector("#groupNameInput").value = "";
+        document.querySelector("#groupMembersInput").value = "";
+
+        const groups = await loadGroups();
+
+        openGroupSelector(groups);
+
+    } catch (err) {
+
+        console.error(err);
+        alert("Unable to create group.");
+
+    }
+
+}
+
+  function openGroupSelector(groups) {
     console.log("openGroupSelector called");
 
 
@@ -450,68 +601,6 @@ function openGroupSelector(groups) {
     modal.hidden = false;      // ONLY opens when this function is called
 }
 
-async function createGroup() {
-
-    const groupName = document
-        .querySelector("#groupNameInput")
-        .value
-        .trim();
-
-    const members = document
-        .querySelector("#groupMembersInput")
-        .value
-        .split(",")
-        .map(x => x.trim())
-        .filter(Boolean);
-
-    if (!groupName) {
-        alert("Please enter a group name.");
-        return;
-    }
-
-    try {
-
-        const response = await apiFetch("/groups", {
-            method: "POST",
-            body: JSON.stringify({
-                groupName,
-                members
-            })
-        });
-
-        if (!response.ok) {
-            alert("Failed to create group.");
-            return;
-        }
-
-        document.querySelector("#groupNameInput").value = "";
-        document.querySelector("#groupMembersInput").value = "";
-
-        const groups = await loadGroups();
-
-        openGroupSelector(groups);
-
-    } catch (err) {
-
-        console.error(err);
-        alert("Unable to create group.");
-
-    }
-
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
   async function loadGroups() {
 
   const response = await apiFetch("/groups");
@@ -522,76 +611,6 @@ async function createGroup() {
 
   return await response.json();
 }
-  function init() {
-    if (!token()) {
-      console.warn('No Cognito access token found. Keep this redirect in production; comment it during local UI work.');
-      // window.location.replace('./index.html');
-    }
-
-    document.querySelectorAll('.tab-button').forEach(btn => btn.addEventListener('click', () => showView(btn.dataset.view)));
-    document.querySelector('#modeToggle').addEventListener('click', () => { isGroupModeActive = !isGroupModeActive; updateMode(); });
-    document.querySelector('#profileButton').addEventListener('click', () => {
-      const menu = document.querySelector('#profileMenu');
-      menu.hidden = !menu.hidden;
-      document.querySelector("#profileButton")
-      .setAttribute(
-          "aria-expanded",
-          String(!menu.hidden)
-      );
-    });
-
-    document.querySelector('#logoutButton').addEventListener('click', () => { sessionStorage.clear(); window.location.assign('./index.html'); });
-    document.querySelector("#closeGroupModal")?.addEventListener("click", () => {
-    document.querySelector("#groupModal").hidden = true;
-    document.querySelector("#createGroupForm").hidden = true;
-    document.querySelector("#groupList").hidden = false;
-    document.querySelector("#newGroupButton").hidden = false;
-});
-    
-    document.querySelector("#newGroupButton")
-    .addEventListener("click", () => {
-    
-        document.querySelector("#groupList").hidden = true;
-        document.querySelector("#newGroupButton").hidden = true;
-    
-        document.querySelector("#createGroupForm").hidden = false;
-    
-    });
-    document.querySelector('#settingsButton')?.addEventListener('click', () => {
-      // Placeholder until settings page is implemented
-      alert('Settings page will be available in the next update.');
-    });
-
-    document.querySelector('#recordButton').addEventListener('click', async () => {
-        // Personal Expense Tracker
-  if (!isGroupModeActive) {
-    window.location.assign("./import.html");
-    return;
- }
-   try {
-        const groups = await loadGroups();
-        openGroupSelector(groups);
-    } catch (err) {
-        console.error(err);
-        alert("Unable to load groups.");
-    }
-
-    });
-
-    const fileInput = document.querySelector('#receiptFile');
-    const dropZone = document.querySelector('#dropZone');
-    dropZone.addEventListener('click', () => fileInput.click());
-    fileInput.addEventListener('change', () => handleFiles(fileInput.files));
-    ['dragenter', 'dragover'].forEach(type => dropZone.addEventListener(type, event => { event.preventDefault(); dropZone.classList.add('is-over'); }));
-    ['dragleave', 'drop'].forEach(type => dropZone.addEventListener(type, event => { event.preventDefault(); dropZone.classList.remove('is-over'); }));
-    dropZone.addEventListener('drop', event => handleFiles(event.dataTransfer.files));
-
-    consumeIncomingEntries();
-    renderDocuments();
-    renderCategoryBars();
-    loadUserProfile();
-    updateMode();
-  }
 
   init();
 })();

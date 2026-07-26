@@ -205,7 +205,7 @@ Resources:
             Path: /groups/{groupId}/splits
             Method: POST
 
-    GroupsFunction:
+  GroupsFunction:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: functions/groups/
@@ -291,6 +291,22 @@ Resources:
             Method: POST
             Auth:
               Authorizer: NONE
+
+ExpensesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: functions/expenses/
+      Handler: app.handler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref LedgerTable
+      Events:
+        ExpensesRoot:
+          Type: Api
+          Properties:
+            RestApiId: !Ref EquiLedgerApi
+            Path: /expenses
+            Method: ANY
 
   OcrFunctionPermission:
     Type: AWS::Lambda::Permission
