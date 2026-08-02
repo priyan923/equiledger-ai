@@ -2,6 +2,8 @@ import json
 import os
 
 ALLOWED_ORIGIN = os.environ.get("ALLOWED_ORIGIN", "*")
+# TASK 7 FIX: Create a debug flag that defaults to false to prevent PII leaks
+DEBUG = os.environ.get("DEBUG", "false").lower() == "true"
 
 def response(status_code, body):
     return {
@@ -19,8 +21,11 @@ def handler(event, context):
     if event.get("httpMethod") == "OPTIONS":
         return response(204, {})
 
-    # Log the incoming event to CloudWatch so we can debug if claims are missing!
-    print(f"Incoming Event: {json.dumps(event)}")
+    # Only log the raw event if explicitly debugging
+    if DEBUG:
+        print(f"Incoming Event: {json.dumps(event)}")
+    else:
+        print("Profile handler invoked. (Raw event logging disabled for PII protection)")
 
     # API Gateway extracts the validated token claims and passes them here
     claims = (

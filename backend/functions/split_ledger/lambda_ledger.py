@@ -137,9 +137,39 @@ def commit_split(payload, user_id):
     }
 
 
+def get_recent_activity(group_id):
+    # Query the exact GROUP pk and ACTIVITY sk you created in put_activity
+    result = ledger_table.query(
+        KeyConditionExpression="pk = :pk AND begins_with(sk, :prefix)",
+        ExpressionAttributeValues={
+            ":pk": f"GROUP#{group_id}", 
+            ":prefix": "ACTIVITY#"
+        },
+        ScanIndexForward=False, # Sort newest to oldest
+        Limit=10
+    )
+    return result.get("Items", [])
+
+def get_group_balances(group_id):
+    result = ledger_table.query(
+        KeyConditionExpression="pk = :pk AND begins_with(sk, :prefix)",
+        ExpressionAttributeValues={
+            ":pk": f"GROUP#{group_id}", 
+            ":prefix": "BALANCE#"
+        }
+    )
+    return result.get("Items", [])
+
 def handler(event, context):
     if event.get("httpMethod") == "OPTIONS":
         return response(204, {})
+
+    if event.get("httpMethod") == "GET":
+        group_id = event.get("pathParameters", {}).get("groupId", "trip-to-goa")
+        return response(200, {
+            "activity": get_recent_activity(group_id),
+            "balances": get_group_balances(group_id)
+    })
 
     if event.get("httpMethod") != "POST":
         return response(405, {"message": "Method not allowed"})

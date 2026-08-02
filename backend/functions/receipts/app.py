@@ -1,12 +1,14 @@
 import json
 import os
 import time
+import base64
 from uuid import uuid4
 
 import boto3
+from botocore.config import Config
 
-
-s3 = boto3.client("s3")
+# Force Signature Version 4 (Required for ap-south-1 and newer AWS regions)
+s3 = boto3.client("s3", config=Config(signature_version="s3v4"))
 dynamodb = boto3.resource("dynamodb")
 table = dynamodb.Table(os.environ["RECEIPTS_TABLE"])
 ocr_table = dynamodb.Table(os.environ["OCR_RESULTS_TABLE"])
@@ -28,18 +30,26 @@ def response(status_code, body):
 
 
 def principal(event):
-    claims = (
-        event.get("requestContext", {})
-        .get("authorizer", {})
-        .get("claims", {})
-    )
+    request_context = event.get("requestContext") or {}
+    authorizer = request_context.get("authorizer") or {}
+    claims = authorizer.get("claims") or {}
     return claims.get("sub") or "local-development-user"
 
 
 def request_body(event):
-    if not event.get("body"):
+    body = event.get("body")
+    if not body:
         return {}
-    return json.loads(event["body"])
+    
+    # API Gateway sometimes passes the body as a pre-parsed dict
+    if isinstance(body, dict):
+        return body
+        
+    # API Gateway sometimes Base64 encodes the JSON payload
+    if event.get("isBase64Encoded"):
+        body = base64.b64decode(body).decode("utf-8")
+        
+    return json.loads(body)
 
 
 def upload_url(user_id, payload):
@@ -110,7 +120,6 @@ def get_ocr_status(object_key):
     item = result.get("Item")
     if not item:
         return {"status": "PROCESSING"}
-    # --- Ensure strict schema for the Split team ---
     return {
         "status": item.get("status", "PARSED"),
         "parsed": item.get("parsed"),

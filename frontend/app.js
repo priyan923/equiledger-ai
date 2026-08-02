@@ -22,20 +22,6 @@
 
   let isGroupModeActive = readStoredMode();
 
-  // NOTE: state.documents, renderDocuments(), handleFiles(), and requestUpload()
-  // used to live here, rendering a second, fake, hardcoded "Imports" list that
-  // only partially POSTed to /receipts and never actually read the real list
-  // back. That whole embedded #importsView UI + its dead JS has been removed.
-  // frontend/import.html + import.js is the one real Imports implementation
-  // (full drag/drop, S3 presigned upload, Textract+Gemini polling, manual
-  // entry, group vs personal mode) - the Imports nav tab below now just
-  // navigates there.
-  //
-  // Group-mode budget/savingsGoal figures below are still illustrative/demo
-  // values - there's no backend concept of a "group budget" yet (that's a
-  // Person 1/3 concern for group balances, not part of the Ledger/Imports
-  // wiring owned here). Personal-mode numbers are wired to the real
-  // GET /ledger and GET /activity endpoints instead of being hardcoded.
   const state = {
     group: { budget: 18560, spent: 10320, savingsGoal: 3120 },
     categories: [
@@ -48,8 +34,6 @@
     ]
   };
 
-  // Cache of the most recent real ledger data so renderMetrics()/renderLedger()
-  // can be called independently of the async fetch that populates them.
   let personalLedgerData = { items: [], totals: { spent: 0, income: 0 } };
   let personalActivityData = [];
 
@@ -57,72 +41,70 @@
   const dollar = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
 
   function token() {
-  return (
-    sessionStorage.getItem("equiledger.idToken") ||
-    sessionStorage.getItem("idToken") ||
-    ""
-  );
-}
+    return (
+      sessionStorage.getItem("equiledger.idToken") ||
+      sessionStorage.getItem("idToken") ||
+      ""
+    );
+  }
 
   async function loadUserProfile() {
-  try {
-    const res = await apiFetch("/profile", {
-      cache: "no-store"
-    });
+    try {
+      const res = await apiFetch("/profile", {
+        cache: "no-store"
+      });
 
-    if (!res.ok) {
-      throw new Error("Unable to load profile");
+      if (!res.ok) {
+        throw new Error("Unable to load profile");
+      }
+
+      const profile = await res.json();
+
+      const userName = profile.name || "User";
+      const userEmail = profile.email || "";
+
+      const initials = userName
+        .split(" ")
+        .map(word => word[0])
+        .join("")
+        .substring(0, 2)
+        .toUpperCase();
+
+      document.querySelector("#profileButton").textContent = initials;
+
+      const menu = document.querySelector("#profileMenu");
+
+      menu.querySelector("strong").textContent = userName;
+      menu.querySelector("span").textContent = userEmail;
+
+    } catch (err) {
+      console.error(err);
     }
-
-    const profile = await res.json();
-
-    const userName = profile.name || "User";
-    const userEmail = profile.email || "";
-
-    const initials = userName
-      .split(" ")
-      .map(word => word[0])
-      .join("")
-      .substring(0, 2)
-      .toUpperCase();
-
-    document.querySelector("#profileButton").textContent = initials;
-
-    const menu = document.querySelector("#profileMenu");
-
-    menu.querySelector("strong").textContent = userName;
-    menu.querySelector("span").textContent = userEmail;
-
-  } catch (err) {
-    console.error(err);
   }
-}
 
   async function apiFetch(path, options = {}) {
-  const headers = {
-    ...(options.headers || {})
-  };
+    const headers = {
+      ...(options.headers || {})
+    };
 
-  if (!(options.body instanceof FormData)) {
-    headers["Content-Type"] = "application/json";
-  }
-
-  const jwt = token();
-
-  if (jwt) {
-    headers.Authorization = `Bearer ${jwt}`;
-  }
-
-  return fetch(
-    `${API_CONFIG.baseUrl.replace(/\/$/, "")}${path}`,
-    {
-      ...options,
-      headers
+    if (!(options.body instanceof FormData)) {
+      headers["Content-Type"] = "application/json";
     }
-  );
-}
 
-  // --- Real Ledger + Activity data (backend/functions/ledger/app.py) ---
+    const jwt = token();
+
+    if (jwt) {
+      headers.Authorization = `Bearer ${jwt}`;
+    }
+
+    return fetch(
+      `${API_CONFIG.baseUrl.replace(/\/$/, "")}${path}`,
+      {
+        ...options,
+        headers
+      }
+    );
+  }
 
   async function fetchLedger() {
     try {
@@ -143,32 +125,12 @@
     }
   }
 
-  async function fetchActivity() {
-    try {
-      const res = await apiFetch('/activity');
-      if (!res.ok) throw new Error(`GET /activity failed (HTTP ${res.status})`);
-      const data = await res.json();
-      return data.items || [];
-    } catch (err) {
-      console.error('Could not load activity feed', err);
-      return [];
-    }
-  }
-
-  async function loadPersonalLedgerData() {
-    const [ledger, activity] = await Promise.all([fetchLedger(), fetchActivity()]);
-    personalLedgerData = ledger;
-    personalActivityData = activity;
-  }
-
   function currentMode() {
     return { key: isGroupModeActive ? 'group' : 'personal' };
   }
 
   function renderMetrics() {
     if (isGroupModeActive) {
-      // Group budget tracking isn't backed by a real endpoint yet - left as
-      // illustrative demo numbers, out of scope for the Ledger/Imports wiring.
       const g = state.group;
       const cards = [
         ['Total Group Budget', money.format(g.budget), 'Monthly envelope'],
@@ -186,7 +148,6 @@
       return;
     }
 
-    // Personal mode: real numbers from GET /ledger's totals.
     const { spent, income } = personalLedgerData.totals;
     const net = income - spent;
     const cards = [
@@ -220,27 +181,39 @@
       
       const thinkingId = 'think-' + Date.now();
       chatHistory.insertAdjacentHTML('beforeend', `<div id="${thinkingId}" class="ai-box" style="color: var(--muted);"><i>Gemini is analyzing...</i></div>`);
-      
       chatHistory.scrollTop = chatHistory.scrollHeight;
 
-      setTimeout(() => {
+      try {
+        const res = await apiFetch('/chat', { 
+          method: 'POST',
+          body: JSON.stringify({ prompt: message }) 
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          throw new Error(data.reply || `API Gateway returned ${res.status}`);
+        }
+        
         const thinkingBubble = document.getElementById(thinkingId);
         if (thinkingBubble) {
-          thinkingBubble.innerHTML = `<b>Gemini:</b> I see your query about "${message}". (Backend connection pending AWS access!)`;
+          thinkingBubble.innerHTML = `<b>Gemini:</b> ${data.reply || "Done."}`; 
           thinkingBubble.style.color = 'var(--text)';
-          chatHistory.scrollTop = chatHistory.scrollHeight;
         }
-      }, 1500);
+      } catch (error) {
+        console.error("Chat error:", error);
+        const thinkingBubble = document.getElementById(thinkingId);
+        if (thinkingBubble) {
+          thinkingBubble.innerHTML = `<b>System:</b> ⚠️ ${error.message}`;
+          thinkingBubble.style.color = '#ff4b4b'; 
+        }
+      } finally {
+        chatHistory.scrollTop = chatHistory.scrollHeight;
+      }
     }
 
-    // Clear existing listeners to prevent duplicates if re-rendered
-    const newSubmit = chatSubmit.cloneNode(true);
-    chatSubmit.parentNode.replaceChild(newSubmit, chatSubmit);
-    const newInput = chatInput.cloneNode(true);
-    chatInput.parentNode.replaceChild(newInput, chatInput);
-
-    newSubmit.addEventListener('click', handleSendMessage);
-    newInput.addEventListener('keypress', (e) => {
+    chatSubmit.addEventListener('click', handleSendMessage);
+    chatInput.addEventListener('keypress', (e) => {
       if (e.key === 'Enter') handleSendMessage();
     });
   }
@@ -288,12 +261,13 @@
     renderLedger();
   }
 
-  function renderGroupDashboard() {
+  async function renderGroupDashboard() {
     document.querySelector('#dashboardPanels').innerHTML = `
       <article class="metric-card"><span>You owe</span><strong class="negative">₹1,580</strong><p>across 2 groups</p></article>
       <article class="metric-card"><span>Owed to you</span><strong class="positive">₹560</strong><p>Trip to Goa</p></article>
       <article class="metric-card"><span>Net balance</span><strong>-₹1,020</strong><p>Jun 2025</p></article>
     `;
+    
     document.querySelector('#topCategories').innerHTML = `
       <div class="panel-kicker">Your active groups</div>
       <div class="group-cards">
@@ -302,14 +276,55 @@
         ${groupCard('▣', 'Work Lunches', 'Aman, Ankit, Sara', '-₹340', '6')}
       </div>
     `;
+
     document.querySelector('#ledgerPanel').innerHTML = `
       <div class="panel-kicker">Recent group activity</div>
-      <div class="activity-list">
-        ${activity('AM', 'Aman paid restaurant bill', 'Trip to Goa · Jun 20', '₹1,323', '')}
-        ${activity('PS', 'Priya added electricity bill', 'Roommates · Jun 18', '₹2,400', 'positive')}
-        ${activity('DV', 'Dev split grocery run', 'Roommates · Jun 16', '₹640', '')}
+      <div class="activity-list" id="dynamicActivityList">
+         <p style="color: var(--muted); padding: 10px;">Loading live database history...</p>
       </div>
     `;
+
+    try {
+      const res = await apiFetch('/groups/trip-to-goa/splits'); 
+      if (res.ok) {
+        const data = await res.json();
+        const activityList = document.querySelector('#dynamicActivityList');
+        
+        if (data.activity && data.activity.length > 0) {
+          activityList.innerHTML = data.activity.map(item => {
+            const dateStr = new Date(item.createdAt * 1000).toLocaleDateString();
+            return activity('✓', item.message, `Trip to Goa · ${dateStr}`, '', 'positive');
+          }).join('');
+        } else {
+          activityList.innerHTML = '<p style="color: var(--muted); padding: 10px;">No recent activity.</p>';
+        }
+
+        if (data.balances) {
+          const profileRes = await apiFetch('/profile');
+          let myId = 'aman'; 
+          if (profileRes.ok) {
+             const profileData = await profileRes.json();
+             myId = profileData.userId || myId;
+          }
+
+          const myBalanceRecord = data.balances.find(b => b.memberId === myId);
+          const myNetBalance = myBalanceRecord ? parseFloat(myBalanceRecord.balance) : 0;
+          
+          const youOwe = myNetBalance < 0 ? Math.abs(myNetBalance) : 0;
+          const owedToYou = myNetBalance > 0 ? myNetBalance : 0;
+
+          document.querySelector('#dashboardPanels').innerHTML = `
+            <article class="metric-card"><span>You owe</span><strong class="negative">₹${Math.round(youOwe)}</strong><p>across 1 group</p></article>
+            <article class="metric-card"><span>Owed to you</span><strong class="positive">₹${Math.round(owedToYou)}</strong><p>Trip to Goa</p></article>
+            <article class="metric-card"><span>Net balance</span><strong>${myNetBalance < 0 ? '-' : ''}₹${Math.round(Math.abs(myNetBalance))}</strong><p>Current Total</p></article>
+          `;
+          
+          document.querySelector('.group-cards').innerHTML = groupCard('✈', 'Trip to Goa', 'Dynamic Group', `${myNetBalance < 0 ? '-' : '+'}₹${Math.round(Math.abs(myNetBalance))}`, data.activity.length);
+        }
+      }
+    } catch (err) {
+      console.error("Could not fetch group activity:", err);
+    }
   }
 
   function groupCard(icon, title, people, balance, tx) {
@@ -326,8 +341,6 @@
     document.querySelector('#topCategories').innerHTML = `<div class="panel-kicker">Top categories · Gemini <span style="float:right">↯</span></div><div class="category-layout"><div class="donut"></div><div class="category-legend">${items}</div></div>`;
   }
 
-  // Personal Ledger panel - now backed by real GET /ledger items instead of
-  // three hardcoded rows.
   function renderLedger() {
     const rows = personalLedgerData.items.slice(0, 25).map(item => ledgerRow(
       item.createdAt ? new Date(item.createdAt * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—',
@@ -358,7 +371,6 @@
   }
 
   async function updateMode() {
-
     writeStoredMode(isGroupModeActive);
 
     const title = document.querySelector("#dashboardTitle");
@@ -377,37 +389,37 @@
         : "June 2025 · Personal View · Gemini";
 
     if (!isGroupModeActive) {
-        await loadPersonalLedgerData();
+        personalLedgerData = await fetchLedger();
+        
+        try {
+            const actRes = await apiFetch('/activity');
+            if (actRes.ok) {
+                const actData = await actRes.json();
+                personalActivityData = actData.items || [];
+            }
+        } catch (e) { 
+            console.error(e); 
+        }
     }
 
     renderMetrics();
 
     if (isGroupModeActive) {
         renderGroupDashboard();
-
         document.querySelectorAll(".group-card").forEach(card => {
-
             card.onclick = () => {
-
                 sessionStorage.setItem(
                     "equiledger.selectedGroup",
                     card.dataset.groupName
                 );
-
                 window.location.assign("./split.html");
-
             };
-
         });
-
     } else {
-
         renderPersonalDashboard();
         setupAIChat();
-
     }
-
-}
+  }
 
   function showView(view) {
     document.querySelectorAll('.view').forEach(el => el.classList.remove('is-active'));
@@ -415,202 +427,144 @@
     document.querySelectorAll('.tab-button').forEach(btn => btn.classList.toggle('is-active', btn.dataset.view === view));
   }
 
+  function consumeIncomingEntries() {
+    const raw = sessionStorage.getItem('equiledger.newDocuments');
+    if (!raw) return;
+    sessionStorage.removeItem('equiledger.newDocuments');
+    try {
+      const incoming = JSON.parse(raw);
+      incoming.forEach(doc => state.documents.unshift(doc));
+    } catch (err) {
+      console.error('Could not parse incoming documents', err);
+    }
+  }
+
+  function handleFiles(files) {
+    Array.from(files).forEach(file => {
+      state.documents.unshift([file.name, `${Math.round(file.size / 1024)} KB · pending upload`, 'Unsorted', 'Processing...', 0]);
+    });
+    renderDocuments();
+    if (!API_CONFIG.baseUrl.includes('YOUR_API')) {
+      Array.from(files).forEach(file => requestUpload(file));
+    }
+  }
+
+  async function requestUpload(file) {
+    try {
+      const res = await apiFetch('/receipts/upload-url', {
+        method: 'POST',
+        body: JSON.stringify({ fileName: file.name, contentType: file.type || 'application/octet-stream' })
+      });
+      const { uploadUrl, objectKey } = await res.json();
+
+      await fetch(uploadUrl, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file });
+      await apiFetch('/receipts', { method: 'POST', body: JSON.stringify({ objectKey, fileName: file.name }) });
+
+      const docIndex = state.documents.findIndex(d => d[0] === file.name);
+      let attempts = 0;
+      
+      const poll = setInterval(async () => {
+        attempts++;
+        if (attempts > 15) { 
+          clearInterval(poll);
+          if (docIndex !== -1) {
+            state.documents[docIndex][3] = 'Timeout';
+            renderDocuments();
+          }
+          return;
+        }
+        
+        const statusRes = await apiFetch(`/receipts/status?objectKey=${objectKey}`);
+        const statusData = await statusRes.json();
+        
+        if (statusData.status === 'PARSED' || statusData.status === 'FAILED') {
+          clearInterval(poll);
+          if (docIndex !== -1) {
+            state.documents[docIndex][1] = statusData.error ? `⚠️ ${statusData.error}` : 'Cloud processing complete';
+            state.documents[docIndex][3] = statusData.status === 'PARSED' ? 'Parsed' : 'Error';
+            if (statusData.parsed && statusData.parsed.total) {
+              state.documents[docIndex][4] = statusData.parsed.total;
+            }
+            renderDocuments();
+          }
+          if (statusData.status === 'PARSED' && isGroupModeActive) {
+            const pd = statusData.parsed;
+            const groupBillData = {
+              groupId: 'trip-to-goa',
+              receiptId: statusData.objectKey || 'scanned-receipt',
+              subtotal: pd.subtotal || 0,
+              taxes: pd.tax || 0,
+              total: pd.total || 0,
+              items: (pd.items || []).map((item, index) => ({
+                id: `item-${index}`,
+                emoji: '🏷️', 
+                name: item.name,
+                amount: item.amount
+              }))
+            };
+
+            sessionStorage.setItem('equiledger.parsedBill', JSON.stringify(groupBillData));
+            
+            const assignBtn = document.querySelector('.assign-btn, #assignItemsButton, button:contains("Assign Items")');
+            if (assignBtn) {
+               assignBtn.classList.add('is-ready');
+               assignBtn.disabled = false;
+               assignBtn.addEventListener('click', () => {
+                   window.location.assign('./split.html');
+               });
+            } else {
+               window.location.assign('./split.html');
+            }
+          }
+        }
+      }, 3000); 
+
+    } catch (err) {
+      console.error('Receipt upload failed', err);
+      const docIndex = state.documents.findIndex(d => d[0] === file.name);
+      if (docIndex !== -1) {
+        state.documents[docIndex][3] = 'Error';
+        renderDocuments();
+      }
+    }
+  }
+
   function init() {
     if (!token()) {
-      console.warn('No Cognito access token found. Keep this redirect in production; comment it during local UI work.');
-      // window.location.replace('./index.html');
+      console.warn('No Cognito access token found.');
     }
 
     document.querySelectorAll('.tab-button').forEach(btn => btn.addEventListener('click', () => {
-      // Imports no longer has an embedded view on the dashboard - it always
-      // navigates to the real Imports page (frontend/import.html).
       if (btn.dataset.view === 'imports') {
         window.location.assign('./import.html');
         return;
       }
       showView(btn.dataset.view);
     }));
+
     document.querySelector('#modeToggle').addEventListener('click', () => { isGroupModeActive = !isGroupModeActive; updateMode(); });
+    
     document.querySelector('#profileButton').addEventListener('click', () => {
       const menu = document.querySelector('#profileMenu');
       menu.hidden = !menu.hidden;
-      document.querySelector("#profileButton")
-      .setAttribute(
-          "aria-expanded",
-          String(!menu.hidden)
-      );
+      document.querySelector("#profileButton").setAttribute("aria-expanded", String(!menu.hidden));
     });
 
     document.querySelector('#logoutButton').addEventListener('click', () => { sessionStorage.clear(); window.location.assign('./index.html'); });
-    document.querySelector("#closeGroupModal")?.addEventListener("click", () => {
-    document.querySelector("#groupModal").hidden = true;
-    document.querySelector("#createGroupForm").hidden = true;
-    document.querySelector("#groupList").hidden = false;
-    document.querySelector("#newGroupButton").hidden = false;
-});
     
-    document.querySelector("#newGroupButton")
-    .addEventListener("click", () => {
-    
-        document.querySelector("#groupList").hidden = true;
-        document.querySelector("#newGroupButton").hidden = true;
-    
-        document.querySelector("#createGroupForm").hidden = false;
-    
-    });
     document.querySelector('#settingsButton')?.addEventListener('click', () => {
-      // Placeholder until settings page is implemented
       alert('Settings page will be available in the next update.');
     });
 
-    document.querySelector('#recordButton').addEventListener('click', async () => {
-        // Personal Expense Tracker
-  if (!isGroupModeActive) {
-    window.location.assign("./import.html");
-    return;
- }
-   try {
-        const groups = await loadGroups();
-        openGroupSelector(groups);
-    } catch (err) {
-        console.error(err);
-        alert("Unable to load groups.");
-    }
-
+    // Ghost User Fix: The Record button directly goes to import.html now, bypassing the dead /groups API
+    document.querySelector('#recordButton').addEventListener('click', () => {
+      window.location.assign("./import.html");
     });
 
     renderCategoryBars();
     loadUserProfile();
     updateMode();
   }
-
-  async function createGroup() {
-
-    const groupName = document
-        .querySelector("#groupNameInput")
-        .value
-        .trim();
-
-    const members = document
-        .querySelector("#groupMembersInput")
-        .value
-        .split(",")
-        .map(x => x.trim())
-        .filter(Boolean);
-
-    if (!groupName) {
-        alert("Please enter a group name.");
-        return;
-    }
-
-    try {
-
-        const response = await apiFetch("/groups", {
-            method: "POST",
-            body: JSON.stringify({
-                groupName,
-                members
-            })
-        });
-
-        if (!response.ok) {
-            alert("Failed to create group.");
-            return;
-        }
-
-        document.querySelector("#groupNameInput").value = "";
-        document.querySelector("#groupMembersInput").value = "";
-
-        const groups = await loadGroups();
-
-        openGroupSelector(groups);
-
-    } catch (err) {
-
-        console.error(err);
-        alert("Unable to create group.");
-
-    }
-
-}
-
-  function openGroupSelector(groups) {
-    console.log("openGroupSelector called");
-
-
-    const modal = document.querySelector("#groupModal");
-    const list = document.querySelector("#groupList");
-
-    if (!modal || !list) return;
-
-    modal.hidden = true;          // keep hidden until we're ready
-    list.innerHTML = "";
-
-    if (!Array.isArray(groups)) {
-        groups = [];
-    }
-
-    if (groups.length === 0) {
-
-        list.innerHTML = `
-            <div class="group-item">
-                <strong>No groups found</strong>
-                <small>Create your first expense group.</small>
-            </div>
-        `;
-
-    } else {
-
-        groups.forEach(group => {
-
-            const item = document.createElement("div");
-            item.className = "group-item";
-
-            item.innerHTML = `
-                <strong>${group.groupName}</strong><br>
-                <small>${group.members.length} member${group.members.length === 1 ? "" : "s"}</small>
-            `;
-
-            item.onclick = () => {
-
-                sessionStorage.setItem(
-                    "equiledger.selectedGroupId",
-                    group.groupId
-                );
-
-                sessionStorage.setItem(
-                    "equiledger.selectedGroup",
-                    group.groupName
-                );
-
-                modal.hidden = true;
-
-                window.location.assign("./split.html");
-            };
-
-            list.appendChild(item);
-
-        });
-
-    }
-
-    document.querySelector("#groupList").hidden = false;
-    document.querySelector("#newGroupButton").hidden = false;
-    document.querySelector("#createGroupForm").hidden = true;
-
-    modal.hidden = false;      // ONLY opens when this function is called
-}
-
-  async function loadGroups() {
-
-  const response = await apiFetch("/groups");
-
-  if (!response.ok) {
-    return [];
-  }
-
-  return await response.json();
-}
 
   init();
 })();

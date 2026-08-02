@@ -7,31 +7,31 @@
     return;
   }
 
-  const API_CONFIG = { baseUrl: AmazonConfig.API_GATEWAY_URL };
+  const API_CONFIG = {
+    baseUrl: AmazonConfig.API_GATEWAY_URL
+  };
 
   const POLL_INTERVAL_MS = 2000;
   const POLL_MAX_ATTEMPTS = 30;
 
   const token = () => sessionStorage.getItem('equiledger.idToken') || '';
+  
+  // FIX: Added the missing currentMode helper function
   function currentMode() {
-  return sessionStorage.getItem('equiledger.mode') || 'personal';
-   }
+    return sessionStorage.getItem('equiledger.mode') === 'group' ? 'group' : 'personal';
+  }
+  
   function apiUrl(path) { return `${API_CONFIG.baseUrl.replace(/\/$/, '')}${path}`; }
 
   async function gatewayFetch(path, options = {}) {
     const headers = { 
-        Authorization: `Bearer ${token()}`, 
+        Authorization: token(), 
         'Content-Type': 'application/json', 
         ...(options.headers || {}) 
     };
     return fetch(apiUrl(path), { ...options, headers });
   }
 
-  // Posts a resulting transaction to the Ledger table (backend/functions/ledger/app.py).
-  // Called after both a manual save and a successful OCR scan so the Personal
-  // Ledger panel on the dashboard (wired to GET /ledger + GET /activity) is
-  // ever actually populated. Errors here are logged but don't block the
-  // /receipts flow that already succeeded.
   async function postLedgerEntry({ description, amount, category, account, mode }) {
     try {
       const res = await gatewayFetch('/ledger', {
@@ -58,25 +58,18 @@
     try {
       let url = '/receipts';
 
-if (currentMode() === 'group') {
+      if (currentMode() === 'group') {
+          const groupId = sessionStorage.getItem('equiledger.activeGroupId');
+          url += `?mode=group&groupId=${encodeURIComponent(groupId)}`;
+      } else {
+          url += '?mode=personal';
+      }
 
-    const groupId =
-        sessionStorage.getItem('equiledger.activeGroupId');
-
-    url += `?mode=group&groupId=${encodeURIComponent(groupId)}`;
-
-} else {
-
-    url += '?mode=personal';
-
-}
-
-const res = await gatewayFetch(url);
+      const res = await gatewayFetch(url);
       if (!res.ok) return;
+      
       const data = await res.json();
-      // GET /receipts (backend/functions/receipts/app.py) returns { items: [...] },
-      // not { receipts: [...] } - reading the wrong key here meant this list never
-      // rendered (silently swallowed by the catch below).
+      
       document.querySelector('#documentRows').innerHTML = (data.items || []).map(r => {
         const meta = [r.createdAt ? new Date(r.createdAt * 1000).toLocaleDateString() : null, r.groupId]
           .filter(Boolean).join(' · ');
@@ -100,11 +93,6 @@ const res = await gatewayFetch(url);
     document.querySelector('#scanStatus').textContent = message;
   }
 
-  // The OCR lambda (Textract + Gemini) writes { items: [{name, amount}], subtotal, tax, total }
-  // to DynamoDB. split.js expects sessionStorage key 'equiledger.parsedBill' shaped like
-  // { groupId, receiptId, subtotal, taxes, items: [{id, emoji, name, amount}], total }.
-  // This adapter bridges the two without needing to touch the backend payload shape or
-  // rename any of the already-provisioned AWS resources/env vars.
   function toSplitBillShape(parsed, file) {
     const slugify = (text, index) => (text || `item-${index}`)
       .toLowerCase()
@@ -119,8 +107,7 @@ const res = await gatewayFetch(url);
     }));
 
     return {
-      groupId:
-      sessionStorage.getItem('equiledger.activeGroupId'),
+      groupId: sessionStorage.getItem('equiledger.activeGroupId'),
       receiptId: (file && file.name ? file.name.replace(/\.[^.]+$/, '') : `receipt-${Date.now()}`),
       subtotal: Number(parsed.subtotal) || 0,
       taxes: Number(parsed.tax) || 0,
@@ -131,13 +118,10 @@ const res = await gatewayFetch(url);
 
   async function handleScan(file, mode) {
     document.querySelector('#scanOverlay').hidden = false;
-    setScanState(
-    'busy',
-    'Processing receipt...'
-    );
+    setScanState('busy', 'Processing receipt...');
 
     try {
-      // 1. Upload to S3[cite: 3]
+      // 1. Upload to S3
       const presignRes = await gatewayFetch('/receipts/upload-url', { 
         method: 'POST', 
         body: JSON.stringify({ fileName: file.name, contentType: file.type }) 
@@ -152,23 +136,20 @@ const res = await gatewayFetch(url);
       });
       if (!putRes.ok) throw new Error(`S3 upload failed (HTTP ${putRes.status})`);
 
-      // Record the receipt so it shows up in the documents list / DynamoDB right away.
       await gatewayFetch('/receipts', {
-    method: 'POST',
-    body: JSON.stringify({
-        objectKey: presign.objectKey,
-        fileName: file.name,
-        mode,
-        groupId:
-            mode === 'group'
-                ? sessionStorage.getItem('equiledger.activeGroupId')
-                : null
-    })
-});
+        method: 'POST',
+        body: JSON.stringify({
+            objectKey: presign.objectKey,
+            fileName: file.name,
+            mode,
+            groupId: mode === 'group' ? sessionStorage.getItem('equiledger.activeGroupId') : null
+        })
+      });
 
-      // 2. Poll for final data from backend[cite: 3]
+      // 2. Poll for final data from backend
       let parsed = null;
       let failed = false;
+      
       for (let i = 0; i < POLL_MAX_ATTEMPTS; i++) {
         const res = await gatewayFetch(`/receipts/status?objectKey=${encodeURIComponent(presign.objectKey)}`);
         if (res.ok) {
@@ -189,41 +170,22 @@ const res = await gatewayFetch(url);
       if (failed) throw new Error('Textract/Gemini could not parse this receipt');
       if (!parsed) throw new Error('Parsing timed out');
 
-      // --- Persist data for the Split team, in the shape split.js expects ---
-const splitBill = toSplitBillShape(parsed, file);
+      // --- Persist data for the Split team ---
+      const splitBill = toSplitBillShape(parsed, file);
 
-if (mode === 'group') {
+      if (mode === 'group') {
+          const activeGroup = sessionStorage.getItem('equiledger.activeGroupId');
+          if (!activeGroup) {
+              document.querySelector('#scanOverlay').hidden = true;
+              alert("Please create or select a group first.");
+              return;
+          }
+          splitBill.groupId = activeGroup;
+      }
 
-    const activeGroup = sessionStorage.getItem('equiledger.activeGroupId');
+      sessionStorage.setItem('equiledger.parsedBill', JSON.stringify(splitBill));
+      sessionStorage.setItem('activeBillData', JSON.stringify(parsed));
 
-    if (!activeGroup) {
-
-        document.querySelector('#scanOverlay').hidden = true;
-
-        alert("Please create or select a group first.");
-
-        return;
-    }
-
-    splitBill.groupId = activeGroup;
-}
-
-sessionStorage.setItem(
-    'equiledger.parsedBill',
-    JSON.stringify(splitBill)
-);
-
-
-sessionStorage.setItem(
-    'activeBillData',
-    JSON.stringify(parsed)
-);
-
-      // In personal mode a scanned receipt is a finished transaction right away
-      // (there's no split/settlement step), so record it straight to the Ledger
-      // now. In group mode the real per-person amounts aren't known until the
-      // Split team's settlement flow finalizes it (backend/functions/split_ledger),
-      // so we intentionally do NOT double-post here for group receipts.
       if (mode !== 'group') {
         await postLedgerEntry({
           description: file.name.replace(/\.[^.]+$/, '') || 'Scanned receipt',
@@ -234,7 +196,7 @@ sessionStorage.setItem(
         });
       }
 
-      // 3. UI Update[cite: 3]
+      // 3. UI Update
       document.querySelector('#scanDoneSummary').textContent = 
         `${parsed.items?.length || 0} items extracted · ₹${parsed.total}`;
       setScanState('done', '✓ Parsing complete.');
@@ -243,27 +205,18 @@ sessionStorage.setItem(
       // --- Enable navigation to split.html ---
       const assignBtn = document.querySelector('#assignFromScan');
       assignBtn.onclick = () => {
-
-    if (mode === 'group') {
-
-        window.location.href = './split.html';
-
-    } else {
-
-        window.location.href = './dashboard.html';
-
-    }
-
-};
-      // -------------------------------------------
+          if (mode === 'group') {
+              window.location.href = './split.html';
+          } else {
+              window.location.href = './dashboard.html';
+          }
+      };
 
       renderDocuments();
 
     } catch (error) {
-      // --- Clear stale data if scan fails ---
       sessionStorage.removeItem('activeBillData');
       sessionStorage.removeItem('equiledger.parsedBill');
-      // ------------------------------------------
       setScanState('idle', '⊗ Parsing failed.');
       console.error(error);
     }
@@ -274,65 +227,55 @@ sessionStorage.setItem(
   function handleFiles(fileList, mode) {
     const files = Array.from(fileList || []);
     if (!files.length) return;
-    // Scan modal shows one bill at a time; process sequentially so the
-    // scan overlay/status reflects each upload in turn.
     files.reduce(
       (chain, file) => chain.then(() => handleScan(file, mode)),
       Promise.resolve()
     );
   }
 
-  // --- Updated Upload Handlers ---
   function initDropzone() {
     const dropZone = document.querySelector('#dropZone');
     const fileInput = document.querySelector('#fileInput');
 
-    // Ensure the drag-and-drop works
     dropZone.addEventListener('click', () => fileInput.click());
 
-    // Actually react to file selection - this was previously missing, which
-    // is why nothing happened after picking a file in the OS file dialog.
     fileInput.addEventListener('change', (e) => {
       handleFiles(e.target.files, currentMode());
       fileInput.value = '';
     });
 
-    // Real drag-and-drop support for the drop zone.
     ['dragenter', 'dragover'].forEach(evt => {
       dropZone.addEventListener(evt, (e) => {
         e.preventDefault();
         dropZone.classList.add('is-dragover');
       });
     });
+    
     ['dragleave', 'drop'].forEach(evt => {
       dropZone.addEventListener(evt, (e) => {
         e.preventDefault();
         dropZone.classList.remove('is-dragover');
       });
     });
+    
     dropZone.addEventListener('drop', (e) => {
       handleFiles(e.dataTransfer?.files, currentMode());
     });
 
-    // Explicitly link the upload button (inside the Scan Bill modal) to the file input
     const uploadBtn = document.querySelector('#uploadBillPhoto');
     if (uploadBtn) {
       uploadBtn.addEventListener('click', (e) => {
-        e.stopPropagation(); // Prevent modal closing
+        e.stopPropagation();
         fileInput.click();
       });
     }
   }
 
-  // #manualDate used to render a hardcoded "06/22/2025" text value that was
-  // never read anywhere. It's now a real <input type="date">, defaulted here
-  // to today's date, and its value is read and included in the /receipts and
-  // /ledger payloads when the manual entry is saved.
   function initManualDateDefault() {
     const dateInput = document.querySelector('#manualDate');
     if (!dateInput) return;
     const today = new Date();
-    const iso = today.toISOString().slice(0, 10); // YYYY-MM-DD
+    const iso = today.toISOString().slice(0, 10);
     dateInput.value = iso;
   }
 
@@ -380,12 +323,11 @@ sessionStorage.setItem(
         mode,
         groupId
       };
+      
       try {
         const res = await gatewayFetch('/receipts', { method: 'POST', body: JSON.stringify(payload) });
         if (!res.ok) throw new Error(`Save failed (HTTP ${res.status})`);
 
-        // Also record it in the Ledger so it shows up in the Personal Ledger
-        // panel on the dashboard (backend/functions/ledger/app.py::put_transaction).
         await postLedgerEntry({ description, amount, category, account: 'You', mode });
 
         manualOverlay.hidden = true;
@@ -395,11 +337,6 @@ sessionStorage.setItem(
         alert('Could not save this record. Check API Gateway/DynamoDB connectivity.');
       }
     });
-
-    // If the user opens the Scan Bill modal directly and clicks "Upload Bill
-    // Photo" before ever going through #openRecord, fileInput must already be
-    // wired (done in initDropzone), so nothing extra is needed here.
-    void fileInput;
   }
 
   renderDocuments();

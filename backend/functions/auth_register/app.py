@@ -21,6 +21,10 @@ def get_cognito_username(email):
 
 def calculate_secret_hash(username):
     """Computes the mandatory HMAC-SHA256 signature required by secret-enabled app clients."""
+    # TASK 2 FIX: If there is no secret, do not generate a hash!
+    if not CLIENT_SECRET:
+        return None
+        
     message = username + CLIENT_ID
     dig = hmac.new(
         str(CLIENT_SECRET).encode("utf-8"),
@@ -57,21 +61,26 @@ def sign_up(payload):
     if not email or not password:
         return response(400, {"message": "Email and password are required."})
 
-    # Convert the email format into a safe structural username string
     cognito_username = get_cognito_username(email)
 
     attributes = [{"Name": "email", "Value": email}]
     if name:
         attributes.append({"Name": "name", "Value": name})
 
+    # Dynamically build the AWS request arguments
+    kwargs = {
+        "ClientId": CLIENT_ID,
+        "Username": cognito_username,
+        "Password": password,
+        "UserAttributes": attributes,
+    }
+    
+    secret_hash = calculate_secret_hash(cognito_username)
+    if secret_hash:
+        kwargs["SecretHash"] = secret_hash
+
     try:
-        result = cognito.sign_up(
-            ClientId=CLIENT_ID,
-            SecretHash=calculate_secret_hash(cognito_username),
-            Username=cognito_username,
-            Password=password,
-            UserAttributes=attributes,
-        )
+        result = cognito.sign_up(**kwargs)
     except cognito.exceptions.UsernameExistsException:
         return response(
             409, {"message": "An account with this email already exists."}
@@ -110,14 +119,19 @@ def confirm_sign_up(payload):
         )
 
     cognito_username = get_cognito_username(email)
+    
+    kwargs = {
+        "ClientId": CLIENT_ID,
+        "Username": cognito_username,
+        "ConfirmationCode": code,
+    }
+    
+    secret_hash = calculate_secret_hash(cognito_username)
+    if secret_hash:
+        kwargs["SecretHash"] = secret_hash
 
     try:
-        cognito.confirm_sign_up(
-            ClientId=CLIENT_ID,
-            SecretHash=calculate_secret_hash(cognito_username),
-            Username=cognito_username,
-            ConfirmationCode=code,
-        )
+        cognito.confirm_sign_up(**kwargs)
     except cognito.exceptions.CodeMismatchException:
         return response(400, {"message": "Incorrect verification code."})
     except cognito.exceptions.ExpiredCodeException:
@@ -145,13 +159,18 @@ def resend_code(payload):
         return response(400, {"message": "Email is required."})
 
     cognito_username = get_cognito_username(email)
+    
+    kwargs = {
+        "ClientId": CLIENT_ID,
+        "Username": cognito_username,
+    }
+    
+    secret_hash = calculate_secret_hash(cognito_username)
+    if secret_hash:
+        kwargs["SecretHash"] = secret_hash
 
     try:
-        cognito.resend_confirmation_code(
-            ClientId=CLIENT_ID,
-            SecretHash=calculate_secret_hash(cognito_username),
-            Username=cognito_username,
-        )
+        cognito.resend_confirmation_code(**kwargs)
     except ClientError as exc:
         return response(
             400,
@@ -174,15 +193,20 @@ def login(payload):
 
     cognito_username = get_cognito_username(email)
 
+    auth_params = {
+        "USERNAME": cognito_username,
+        "PASSWORD": password,
+    }
+    
+    secret_hash = calculate_secret_hash(cognito_username)
+    if secret_hash:
+        auth_params["SECRET_HASH"] = secret_hash
+
     try:
         result = cognito.initiate_auth(
             ClientId=CLIENT_ID,
             AuthFlow="USER_PASSWORD_AUTH",
-            AuthParameters={
-                "USERNAME": cognito_username,
-                "PASSWORD": password,
-                "SECRET_HASH": calculate_secret_hash(cognito_username),
-            },
+            AuthParameters=auth_params,
         )
         auth_result = result.get("AuthenticationResult", {})
 

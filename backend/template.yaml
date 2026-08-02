@@ -42,6 +42,17 @@ Resources:
         AllowMethods: "'GET,POST,OPTIONS'"
         AllowHeaders: "'Content-Type,Authorization'"
         AllowOrigin: !Sub "'${AllowedOrigin}'"
+      GatewayResponses:
+        DEFAULT_4XX:
+          ResponseParameters:
+            Headers:
+              Access-Control-Allow-Origin: !Sub "'${AllowedOrigin}'"
+              Access-Control-Allow-Headers: "'Content-Type,Authorization'"
+        DEFAULT_5XX:
+          ResponseParameters:
+            Headers:
+              Access-Control-Allow-Origin: !Sub "'${AllowedOrigin}'"
+              Access-Control-Allow-Headers: "'Content-Type,Authorization'"
       Auth:
         DefaultAuthorizer: CognitoAuthorizer
         AddDefaultAuthorizerToCorsPreflight: false
@@ -187,7 +198,10 @@ Resources:
             TableName: !Ref OcrResultsTable
         - S3ReadPolicy:
             BucketName: !Sub '${AWS::StackName}-receipts-${AWS::AccountId}'
-
+        - Statement:
+            - Effect: Allow
+              Action: 'textract:AnalyzeExpense'
+              Resource: '*'
 
   SplitLedgerFunction:
     Type: AWS::Serverless::Function
@@ -204,6 +218,12 @@ Resources:
             RestApiId: !Ref EquiLedgerApi
             Path: /groups/{groupId}/splits
             Method: POST
+        GetSplits:
+          Type: Api
+          Properties:
+            RestApiId: !Ref EquiLedgerApi
+            Path: /groups/{groupId}/splits
+            Method: GET
 
   GroupsFunction:
     Type: AWS::Serverless::Function
@@ -315,6 +335,34 @@ ExpensesFunction:
       FunctionName: !GetAtt OcrFunction.Arn
       Principal: 's3.amazonaws.com'
       SourceAccount: !Ref 'AWS::AccountId'
+
+  ChatFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: functions/chat/
+      Handler: lambda_chat.handler
+      Timeout: 15
+      MemorySize: 256
+      Environment:
+        Variables:
+          GEMINI_API_KEY: !Ref GeminiApiKey
+          LEDGER_TABLE: !Ref LedgerTable
+          OCR_TABLE: !Ref OcrResultsTable
+          RECEIPTS_TABLE: !Ref ReceiptsTable
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref LedgerTable
+        - DynamoDBReadPolicy:         
+            TableName: !Ref OcrResultsTable
+        - DynamoDBReadPolicy:              
+            TableName: !Ref ReceiptsTable
+      Events:
+        Chat:
+          Type: Api
+          Properties:
+            RestApiId: !Ref EquiLedgerApi
+            Path: /chat
+            Method: POST
 
 Outputs:
   ApiUrl:
