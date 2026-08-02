@@ -41,6 +41,10 @@ def body(event):
 
 
 def put_transaction(user_id, payload):
+    # BACKLOG (Person 2, task 9 - flagged, not building this week): there is no
+    # edit/delete endpoint for transactions even though the table structurally
+    # supports it (pk/sk lookup would be trivial). Noted for the post-launch
+    # backlog rather than squeezed into this week's scope.
     now = int(time.time())
     item = {
         "pk": f"USER#{user_id}",
@@ -65,6 +69,44 @@ def list_transactions(user_id):
         Limit=50,
     )
     return result.get("Items", [])
+
+
+def compute_totals(user_id):
+    # Fix for the totals cap: list_transactions() is deliberately capped at 50
+    # items for the displayed list, but totals must reflect ALL of the user's
+    # transactions or "spent"/"income" on the dashboard silently drifts away
+    # from reality for any user with more than 50 logged transactions. This
+    # paginates through every page via LastEvaluatedKey and sums independently
+    # of the list view's Limit.
+    spent = Decimal(0)
+    income = Decimal(0)
+    exclusive_start_key = None
+
+    while True:
+        query_kwargs = {
+            "KeyConditionExpression": "pk = :pk AND begins_with(sk, :prefix)",
+            "ExpressionAttributeValues": {
+                ":pk": f"USER#{user_id}",
+                ":prefix": "TXN#",
+            },
+        }
+        if exclusive_start_key:
+            query_kwargs["ExclusiveStartKey"] = exclusive_start_key
+
+        result = table.query(**query_kwargs)
+
+        for item in result.get("Items", []):
+            amount = Decimal(str(item.get("amount", 0)))
+            if amount > 0:
+                spent += amount
+            elif amount < 0:
+                income += abs(amount)
+
+        exclusive_start_key = result.get("LastEvaluatedKey")
+        if not exclusive_start_key:
+            break
+
+    return {"spent": spent, "income": income}
 
 
 def activity_feed(user_id):
@@ -94,10 +136,7 @@ def handler(event, context):
 
     if method == "GET":
         items = list_transactions(user_id)
-        totals = {
-            "spent": sum(Decimal(str(i.get("amount", 0))) for i in items if Decimal(str(i.get("amount", 0))) > 0),
-            "income": sum(abs(Decimal(str(i.get("amount", 0)))) for i in items if Decimal(str(i.get("amount", 0))) < 0),
-        }
+        totals = compute_totals(user_id)
         return response(200, {"items": items, "totals": totals})
 
     if method == "POST":

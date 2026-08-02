@@ -1,8 +1,13 @@
 (function () {
   'use strict';
-  const API_CONFIG = {
-  baseUrl: 'https://cx0vxq44ic.execute-api.ap-south-1.amazonaws.com/prod'
-};
+
+  if (typeof AmazonConfig === 'undefined') {
+    console.error("Critical Error: config.js is missing.");
+    alert("Application Configuration Missing! Ensure config.js exists.");
+    return;
+  }
+
+  const API_CONFIG = { baseUrl: AmazonConfig.API_GATEWAY_URL };
 
   const POLL_INTERVAL_MS = 2000;
   const POLL_MAX_ATTEMPTS = 30;
