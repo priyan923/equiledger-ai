@@ -1,0 +1,6 @@
+# lambda_ocr.py calls the Gemini REST API directly over urllib (stdlib) and
+# boto3 (bundled with the Lambda runtime), so no third-party packages are
+# required for this function. Previously listed `google-genai` here even
+# though the code never imports it — removed to keep the deploy package
+# small. If we ever switch lambda_ocr.py to use the official SDK instead of
+# raw urllib calls, re-add `google-genai` here at that time.

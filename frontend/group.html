@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+<meta charset="UTF-8">
+
+<meta name="viewport"
+content="width=device-width, initial-scale=1.0">
+
+<title>Create Group • EquiLedgerAI</title>
+
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="group.css">
+
+</head>
+
+<body>
+
+<header class="app-topbar">
+
+    <a class="brand" href="./dashboard.html">
+
+        <span>EquiLedgerAI</span>
+
+    </a>
+
+</header>
+
+
+<main class="group-container">
+
+    <section class="group-card">
+
+        <h1>Create Group</h1>
+
+        <p>
+            Give your expense group a name and
+            add everyone who will split this bill.
+        </p>
+
+
+        <label class="group-label">
+
+            Group Name
+
+        </label>
+
+        <input
+            id="groupName"
+            class="group-input"
+            type="text"
+            placeholder="Roommates"
+        >
+
+
+
+        <div class="members-header">
+
+            <h2>Members</h2>
+
+        </div>
+
+
+        <div id="memberList">
+
+        </div>
+
+
+        <button
+        id="addMember"
+        class="group-btn group-btn-secondary"
+        type="button">
+
+            + Add Member
+
+        </button>
+
+    
+        <button
+        id="continueButton"
+        class="group-btn group-btn-primary"
+        type="button">
+
+            Continue
+
+        </button>
+
+    </section>
+
+</main>
+
+<script src="config.js"></script>
+<script src="group.js"></script>
+
+</body>
+
+</html>
