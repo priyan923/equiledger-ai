@@ -131,17 +131,23 @@
 
   function renderMetrics() {
     if (isGroupModeActive) {
-      const g = state.group;
+      const customGroups = JSON.parse(localStorage.getItem('userGroups')) || [];
+      let totalOwed = 0;
+      customGroups.forEach(g => {
+        const numericVal = parseFloat((g.balance || '0').replace(/[^0-9.-]+/g, "")) || 0;
+        if (numericVal < 0) totalOwed += Math.abs(numericVal);
+      });
+
       const cards = [
-        ['Total Group Budget', money.format(g.budget), 'Monthly envelope'],
-        ['Group Spent Amount', money.format(g.spent), 'Combined expenses'],
-        ['Group Savings Goal', money.format(g.savingsGoal), 'June target'],
-        ['Group Savings Left Pool', money.format(g.budget - g.spent - g.savingsGoal), 'Budget - spent - goal']
+        ['You owe', money.format(totalOwed), 'across your groups'],
+        ['Owed to you', money.format(0), 'Active balances'],
+        ['Net balance', `-${money.format(totalOwed)}`, 'Current Total'],
+        ['Active Groups', String(customGroups.length), 'Total groups']
       ];
       document.querySelector('#metricGrid').innerHTML = cards.map(([label, value, sub], index) => `
         <article class="metric-card">
           <span>${label}</span>
-          <strong class="${index === 1 ? 'negative' : index === 3 ? 'positive' : ''}">${value}</strong>
+          <strong class="${index === 0 || index === 2 ? 'negative' : index === 1 ? 'positive' : ''}">${value}</strong>
           <p>${sub}</p>
         </article>
       `).join('');
@@ -262,22 +268,28 @@
   }
 
   async function renderGroupDashboard() {
-    document.querySelector('#dashboardPanels').innerHTML = `
-      <article class="metric-card"><span>You owe</span><strong class="negative">₹0</strong><p>across your groups</p></article>
-      <article class="metric-card"><span>Owed to you</span><strong class="positive">₹0</strong><p>Active balances</p></article>
-      <article class="metric-card"><span>Net balance</span><strong>₹0</strong><p>Current Total</p></article>
-    `;
-    
-    // Pull only user-created groups from localStorage
     const customGroups = JSON.parse(localStorage.getItem('userGroups')) || [];
+    
+    let totalOwed = 0;
+    customGroups.forEach(g => {
+      const numericVal = parseFloat((g.balance || '0').replace(/[^0-9.-]+/g, "")) || 0;
+      if (numericVal < 0) totalOwed += Math.abs(numericVal);
+    });
+
+    document.querySelector('#dashboardPanels').innerHTML = `
+      <article class="metric-card"><span>You owe</span><strong class="negative">₹${Math.round(totalOwed)}</strong><p>across your groups</p></article>
+      <article class="metric-card"><span>Owed to you</span><strong class="positive">₹0</strong><p>Active balances</p></article>
+      <article class="metric-card"><span>Net balance</span><strong>-₹${Math.round(totalOwed)}</strong><p>Current Total</p></article>
+    `;
 
     const groupCardsHtml = customGroups.length > 0 
       ? customGroups.map(g => groupCard(
           '✈', 
           g.name, 
-          (g.members || []).join(', '), 
+          (g.members || ['You']).join(', '), 
           g.balance || '₹0', 
-          g.transactions || 0
+          g.transactions || 0,
+          g.id
         )).join('')
       : '<p style="color: var(--muted); padding: 10px;">No groups created yet. Click "+ Create Group" in the top header to start one!</p>';
 
@@ -295,7 +307,6 @@
       </div>
     `;
 
-    // Optional: Safe background fetch for default trip if it exists, without wiping your custom groups
     try {
       const res = await apiFetch('/groups/trip-to-goa/splits'); 
       if (res.ok) {
@@ -314,10 +325,9 @@
     }
   }
 
-
-  function groupCard(icon, title, people, balance, tx) {
+  function groupCard(icon, title, people, balance, tx, groupId) {
     const cls = balance.startsWith('+') ? 'positive' : 'negative';
-    return `<article class="group-card" data-group-name="${title}"  tabindex="0"><div class="group-icon">${icon}</div><h2>${title}</h2><p>${people}</p><div class="group-meta"><div><span class="sub-label">Balance</span><strong class="${cls}">${balance}</strong></div><div><span class="sub-label">Transactions</span><strong>${tx}</strong></div></div></article>`;
+    return `<article class="group-card" data-group-name="${title}" data-group-id="${groupId}" tabindex="0"><div class="group-icon">${icon}</div><h2>${title}</h2><p>${people}</p><div class="group-meta"><div><span class="sub-label">Balance</span><strong class="${cls}">${balance}</strong></div><div><span class="sub-label">Transactions</span><strong>${tx}</strong></div></div></article>`;
   }
 
   function activity(initials, title, sub, amount, cls) {
@@ -396,16 +406,17 @@
         renderGroupDashboard();
         document.querySelectorAll(".group-card").forEach(card => {
             card.onclick = () => {
-                // Store the full unified object contract required by split.js
+                sessionStorage.setItem("equiledger.activeGroupId", card.dataset.groupId || 'group_default');
+                sessionStorage.setItem("equiledger.activeGroupName", card.dataset.groupName);
                 sessionStorage.setItem(
                     "equiledger.activeGroup",
                     JSON.stringify({
-                        groupId: "trip-to-goa", // or card.dataset.groupId if available
+                        groupId: card.dataset.groupId || 'group_default',
                         groupName: card.dataset.groupName,
-                        members: ["Aman", "Gargi", "Rohan"]
+                        members: ["You"]
                     })
                 );
-                window.location.assign("./split.html");
+                window.location.assign("./import.html");
             };
         });
     } else {
@@ -418,107 +429,6 @@
     document.querySelectorAll('.view').forEach(el => el.classList.remove('is-active'));
     document.querySelector(`#${view}View`).classList.add('is-active');
     document.querySelectorAll('.tab-button').forEach(btn => btn.classList.toggle('is-active', btn.dataset.view === view));
-  }
-
-  function consumeIncomingEntries() {
-    const raw = sessionStorage.getItem('equiledger.newDocuments');
-    if (!raw) return;
-    sessionStorage.removeItem('equiledger.newDocuments');
-    try {
-      const incoming = JSON.parse(raw);
-      incoming.forEach(doc => state.documents.unshift(doc));
-    } catch (err) {
-      console.error('Could not parse incoming documents', err);
-    }
-  }
-
-  function handleFiles(files) {
-    Array.from(files).forEach(file => {
-      state.documents.unshift([file.name, `${Math.round(file.size / 1024)} KB · pending upload`, 'Unsorted', 'Processing...', 0]);
-    });
-    renderDocuments();
-    if (!API_CONFIG.baseUrl.includes('YOUR_API')) {
-      Array.from(files).forEach(file => requestUpload(file));
-    }
-  }
-
-  async function requestUpload(file) {
-    try {
-      const res = await apiFetch('/receipts/upload-url', {
-        method: 'POST',
-        body: JSON.stringify({ fileName: file.name, contentType: file.type || 'application/octet-stream' })
-      });
-      const { uploadUrl, objectKey } = await res.json();
-
-      await fetch(uploadUrl, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file });
-      await apiFetch('/receipts', { method: 'POST', body: JSON.stringify({ objectKey, fileName: file.name }) });
-
-      const docIndex = state.documents.findIndex(d => d[0] === file.name);
-      let attempts = 0;
-      
-      const poll = setInterval(async () => {
-        attempts++;
-        if (attempts > 15) { 
-          clearInterval(poll);
-          if (docIndex !== -1) {
-            state.documents[docIndex][3] = 'Timeout';
-            renderDocuments();
-          }
-          return;
-        }
-        
-        const statusRes = await apiFetch(`/receipts/status?objectKey=${objectKey}`);
-        const statusData = await statusRes.json();
-        
-        if (statusData.status === 'PARSED' || statusData.status === 'FAILED') {
-          clearInterval(poll);
-          if (docIndex !== -1) {
-            state.documents[docIndex][1] = statusData.error ? `⚠️ ${statusData.error}` : 'Cloud processing complete';
-            state.documents[docIndex][3] = statusData.status === 'PARSED' ? 'Parsed' : 'Error';
-            if (statusData.parsed && statusData.parsed.total) {
-              state.documents[docIndex][4] = statusData.parsed.total;
-            }
-            renderDocuments();
-          }
-          if (statusData.status === 'PARSED' && isGroupModeActive) {
-              const pd = statusData.parsed;
-              const groupBillData = {
-                groupId: 'trip-to-goa',
-                receiptId: statusData.objectKey || 'scanned-receipt',
-                subtotal: pd.subtotal || 0,
-                taxes: pd.tax || 0,
-                total: pd.total || 0,
-                items: (pd.items || []).map((item, index) => ({
-                  id: `item-${index}`,
-                  emoji: '🏷️', 
-                  name: item.name,
-                  amount: item.amount
-                }))
-              };
-
-              sessionStorage.setItem('equiledger.parsedBill', JSON.stringify(groupBillData));
-              
-              // Light up your existing green "Assign Items" modal button so it waits for your click
-              const assignBtn = document.querySelector('.assign-btn') || document.querySelector('button');
-              if (assignBtn) {
-                 assignBtn.classList.add('is-ready');
-                 assignBtn.disabled = false;
-                 assignBtn.onclick = () => {
-                     window.location.assign('./split.html');
-                 };
-              }
-            }
-        }
-      }, 3000); 
-
-    } catch (err) {
-      console.error('Receipt upload failed', err);
-      const docIndex = state.documents.findIndex(d => d[0] === file.name);
-      if (docIndex !== -1) {
-        state.documents[docIndex][3] = 'Error';
-        renderDocuments();
-      }
-    }
   }
 
   function init() {
@@ -548,7 +458,6 @@
       alert('Settings page will be available in the next update.');
     });
 
-    // Ghost User Fix: The Record button directly goes to import.html now, bypassing the dead /groups API
     document.querySelector('#recordButton').addEventListener('click', () => {
       window.location.assign("./import.html");
     });

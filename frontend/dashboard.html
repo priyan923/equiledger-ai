@@ -14,16 +14,12 @@
       </span>
       <span>EquiLedgerAI</span>
     </a>
-    <a href="./group.html" class="tab-button" style="text-decoration: none; display: inline-flex; align-items: center; gap: 6px;">+ Create Group</a>
+    <!-- Changed from anchor tag to button to open the popup modal -->
+    <button id="openCreateGroupModal" class="tab-button" type="button" style="background: none; border: none; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;">+ Create Group</button>
     <nav class="main-tabs" aria-label="Workspace views">
       <button class="tab-button is-active" type="button" data-view="dashboard">
         <span aria-hidden="true">⌘</span> Dashboard
       </button>
-      <!-- Imports now always navigates straight to import.html (the real,
-           fully-wired Imports UI: drag/drop, S3 presigned upload, Textract+Gemini
-           polling, manual entry, group vs personal mode). The old embedded
-           #importsView tab here was a second, fake, hardcoded UI that never
-           actually round-tripped through the backend - it's been removed. -->
       <button class="tab-button" type="button" data-view="imports">
         <span aria-hidden="true">▣</span> Imports
       </button>
@@ -31,7 +27,7 @@
         <span aria-hidden="true">▥</span> Analytics
       </button>
     </nav>
-
+    
     <div class="header-actions">
       <div class="mode-cluster" aria-label="Tracker mode">
         <span aria-hidden="true">👤</span>
@@ -116,65 +112,102 @@
       </section>
     </section>
   </main>
+
+  <!-- Create Group Popup Modal -->
+  <div id="createGroupModal" class="modal-overlay" hidden style="position: fixed; inset: 0; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 1000;">
+    <section class="record-modal record-modal--single" role="dialog" aria-modal="true" aria-labelledby="groupModalTitle" style="background: #161616; border: 1px solid #333; padding: 24px; border-radius: 8px; width: 400px; max-width: 90%;">
+      <header class="modal-head" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <div>
+          <h2 id="groupModalTitle" style="font-size: 18px; color: #fff; margin: 0;">Create Group</h2>
+          <p style="font-size: 12px; color: #888; margin: 4px 0 0 0;">Enter a name for your expense group</p>
+        </div>
+        <button id="closeGroupModal" class="icon-button" type="button" aria-label="Close" style="background: none; border: none; color: #fff; font-size: 20px; cursor: pointer;">×</button>
+      </header>
+      <div class="record-grid record-grid--single" style="margin-bottom: 20px;">
+        <label style="display: block; font-size: 11px; text-transform: uppercase; color: #888; font-family: 'Courier New', Courier, monospace;">
+          Group Name
+          <input type="text" id="popupGroupName" placeholder="e.g. Pune Trip..." style="width: 100%; margin-top: 8px; padding: 10px; background: #000; border: 1px solid #444; color: #fff; border-radius: 4px; font-family: inherit;">
+        </label>
+      </div>
+      <footer class="modal-foot" style="display: flex; justify-content: flex-end; gap: 10px;">
+        <button id="cancelGroupModal" class="secondary-button" type="button" style="padding: 8px 16px; background: #333; color: #fff; border: none; border-radius: 4px; cursor: pointer;">Cancel</button>
+        <button id="savePopupGroup" class="blue-button" type="button" style="padding: 8px 16px; background: #2563eb; color: #fff; border: none; border-radius: 4px; cursor: pointer;">Create Group</button>
+      </footer>
+    </section>
+  </div>
+
   <div id="groupModal" class="group-modal" hidden>
-
-  <div class="group-modal-card">
-
-    <h2>Select Group</h2>
-
-    <div id="groupList" class="group-list"></div>
-
-    <div id="createGroupForm" hidden>
-
-  <input
-    id="groupNameInput"
-    class="auth-input"
-    type="text"
-    placeholder="Group Name">
-
-  <textarea
-    id="groupMembersInput"
-    class="auth-input"
-    rows="4"
-    placeholder="Member emails (comma separated)"></textarea>
-
-  <div class="group-form-actions">
-    <button
-      id="saveGroupButton"
-      class="record-button"
-      type="button">
-      Create Group
-    </button>
-
-    <button
-      id="backToGroupsButton"
-      class="profile-dropdown-item"
-      type="button">
-      Back
-    </button>
+    <div class="group-modal-card">
+      <h2>Select Group</h2>
+      <div id="groupList" class="group-list"></div>
+      <div id="createGroupForm" hidden>
+        <input id="groupNameInput" class="auth-input" type="text" placeholder="Group Name">
+        <textarea id="groupMembersInput" class="auth-input" rows="4" placeholder="Member emails (comma separated)"></textarea>
+        <div class="group-form-actions">
+          <button id="saveGroupButton" class="record-button" type="button">Create Group</button>
+          <button id="backToGroupsButton" class="profile-dropdown-item" type="button">Back</button>
+        </div>
+      </div>
+      <button id="newGroupButton" class="record-button" type="button">+ Create New Group</button>
+      <button id="closeGroupModalAlt" class="profile-dropdown-item" type="button">Cancel</button>
+    </div>
   </div>
 
-</div>
-
-    <button
-      id="newGroupButton"
-      class="record-button"
-      type="button">
-      + Create New Group
-    </button>
-
-    <button
-      id="closeGroupModal"
-      class="profile-dropdown-item"
-      type="button">
-      Cancel
-    </button>
-
-  </div>
-
-</div>
   <script src="./config.js"></script>
   <script src="./app.js"></script>
-  
+  <script>
+    // Quick inline handler to toggle the group popup modal smoothly from dashboard
+    document.addEventListener('DOMContentLoaded', () => {
+      const openBtn = document.querySelector('#openCreateGroupModal');
+      const modal = document.querySelector('#createGroupModal');
+      const closeBtn = document.querySelector('#closeGroupModal');
+      const cancelBtn = document.querySelector('#cancelGroupModal');
+      const saveBtn = document.querySelector('#savePopupGroup');
+      const nameInput = document.querySelector('#popupGroupName');
+
+      if (openBtn && modal) {
+        openBtn.addEventListener('click', () => {
+          modal.hidden = false;
+          if (nameInput) {
+            nameInput.value = '';
+            nameInput.focus();
+          }
+        });
+      }
+
+      const closeModal = () => { if (modal) modal.hidden = true; };
+      closeBtn?.addEventListener('click', closeModal);
+      cancelBtn?.addEventListener('click', closeModal);
+
+      saveBtn?.addEventListener('click', () => {
+        const groupName = nameInput.value.trim();
+        if (!groupName) {
+          alert('Please enter a group name.');
+          return;
+        }
+
+        const groupId = 'group_' + Date.now();
+        const groupData = {
+          id: groupId,
+          name: groupName,
+          members: ['You'],
+          balance: '₹0',
+          transactions: 0
+        };
+
+        sessionStorage.setItem('equiledger.activeGroupId', groupId);
+        sessionStorage.setItem('equiledger.activeGroupName', groupName);
+        sessionStorage.setItem('equiledger.mode', 'group');
+
+        let savedGroups = JSON.parse(localStorage.getItem('userGroups')) || [];
+        savedGroups.push(groupData);
+        localStorage.setItem('userGroups', JSON.stringify(savedGroups));
+
+        modal.hidden = true;
+        alert(`Group "${groupName}" created successfully!`);
+        window.location.assign('./import.html');
+      });
+    });
+  </script>
 </body>
 </html>

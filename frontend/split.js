@@ -320,6 +320,21 @@
         }
     }
 
+    // --- Persist calculated balance and transaction count back to localStorage for the Dashboard ---
+    const activeGroupId = sessionStorage.getItem('equiledger.activeGroupId');
+    let savedGroups = JSON.parse(localStorage.getItem('userGroups')) || [];
+    const groupIndex = savedGroups.findIndex(g => g.id === activeGroupId);
+
+    if (groupIndex !== -1) {
+        const currentSpent = parseFloat((savedGroups[groupIndex].balance || '0').replace(/[^0-9.-]+/g, "")) || 0;
+        const newTotal = currentSpent + Number(bill.total);
+        
+        savedGroups[groupIndex].balance = `-₹${Math.round(newTotal)}`;
+        savedGroups[groupIndex].transactions = (savedGroups[groupIndex].transactions || 0) + 1;
+        
+        localStorage.setItem('userGroups', JSON.stringify(savedGroups));
+    }
+
     // Force the dashboard to open in Group Mode so they can see their new balances
     sessionStorage.setItem('equiledger.mode', 'group');
     window.location.assign('./dashboard.html');
