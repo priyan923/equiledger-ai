@@ -263,27 +263,39 @@
 
   async function renderGroupDashboard() {
     document.querySelector('#dashboardPanels').innerHTML = `
-      <article class="metric-card"><span>You owe</span><strong class="negative">₹1,580</strong><p>across 2 groups</p></article>
-      <article class="metric-card"><span>Owed to you</span><strong class="positive">₹560</strong><p>Trip to Goa</p></article>
-      <article class="metric-card"><span>Net balance</span><strong>-₹1,020</strong><p>Jun 2025</p></article>
+      <article class="metric-card"><span>You owe</span><strong class="negative">₹0</strong><p>across your groups</p></article>
+      <article class="metric-card"><span>Owed to you</span><strong class="positive">₹0</strong><p>Active balances</p></article>
+      <article class="metric-card"><span>Net balance</span><strong>₹0</strong><p>Current Total</p></article>
     `;
     
+    // Pull only user-created groups from localStorage
+    const customGroups = JSON.parse(localStorage.getItem('userGroups')) || [];
+
+    const groupCardsHtml = customGroups.length > 0 
+      ? customGroups.map(g => groupCard(
+          '✈', 
+          g.name, 
+          (g.members || []).join(', '), 
+          g.balance || '₹0', 
+          g.transactions || 0
+        )).join('')
+      : '<p style="color: var(--muted); padding: 10px;">No groups created yet. Click "+ Create Group" in the top header to start one!</p>';
+
     document.querySelector('#topCategories').innerHTML = `
       <div class="panel-kicker">Your active groups</div>
       <div class="group-cards">
-        ${groupCard('⌂', 'Roommates', 'Aman, Priya, Dev', '-₹1,240', '14')}
-        ${groupCard('✈', 'Trip to Goa', 'Aman, Gargi, Rohan', '+₹560', '8')}
-        ${groupCard('▣', 'Work Lunches', 'Aman, Ankit, Sara', '-₹340', '6')}
+        ${groupCardsHtml}
       </div>
     `;
 
     document.querySelector('#ledgerPanel').innerHTML = `
       <div class="panel-kicker">Recent group activity</div>
       <div class="activity-list" id="dynamicActivityList">
-         <p style="color: var(--muted); padding: 10px;">Loading live database history...</p>
+         <p style="color: var(--muted); padding: 10px;">No recent activity.</p>
       </div>
     `;
 
+    // Optional: Safe background fetch for default trip if it exists, without wiping your custom groups
     try {
       const res = await apiFetch('/groups/trip-to-goa/splits'); 
       if (res.ok) {
@@ -295,37 +307,13 @@
             const dateStr = new Date(item.createdAt * 1000).toLocaleDateString();
             return activity('✓', item.message, `Trip to Goa · ${dateStr}`, '', 'positive');
           }).join('');
-        } else {
-          activityList.innerHTML = '<p style="color: var(--muted); padding: 10px;">No recent activity.</p>';
-        }
-
-        if (data.balances) {
-          const profileRes = await apiFetch('/profile');
-          let myId = 'aman'; 
-          if (profileRes.ok) {
-             const profileData = await profileRes.json();
-             myId = profileData.userId || myId;
-          }
-
-          const myBalanceRecord = data.balances.find(b => b.memberId === myId);
-          const myNetBalance = myBalanceRecord ? parseFloat(myBalanceRecord.balance) : 0;
-          
-          const youOwe = myNetBalance < 0 ? Math.abs(myNetBalance) : 0;
-          const owedToYou = myNetBalance > 0 ? myNetBalance : 0;
-
-          document.querySelector('#dashboardPanels').innerHTML = `
-            <article class="metric-card"><span>You owe</span><strong class="negative">₹${Math.round(youOwe)}</strong><p>across 1 group</p></article>
-            <article class="metric-card"><span>Owed to you</span><strong class="positive">₹${Math.round(owedToYou)}</strong><p>Trip to Goa</p></article>
-            <article class="metric-card"><span>Net balance</span><strong>${myNetBalance < 0 ? '-' : ''}₹${Math.round(Math.abs(myNetBalance))}</strong><p>Current Total</p></article>
-          `;
-          
-          document.querySelector('.group-cards').innerHTML = groupCard('✈', 'Trip to Goa', 'Dynamic Group', `${myNetBalance < 0 ? '-' : '+'}₹${Math.round(Math.abs(myNetBalance))}`, data.activity.length);
         }
       }
     } catch (err) {
       console.error("Could not fetch group activity:", err);
     }
   }
+
 
   function groupCard(icon, title, people, balance, tx) {
     const cls = balance.startsWith('+') ? 'positive' : 'negative';

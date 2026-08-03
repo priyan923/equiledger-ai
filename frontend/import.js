@@ -16,7 +16,6 @@
 
   const token = () => sessionStorage.getItem('equiledger.idToken') || '';
   
-  // FIX: Added the missing currentMode helper function
   function currentMode() {
     return sessionStorage.getItem('equiledger.mode') === 'group' ? 'group' : 'personal';
   }
@@ -50,6 +49,51 @@
       console.error('Could not record ledger transaction', e);
       return null;
     }
+  }
+
+  // --- Group Selection Dropdown Integration ---
+
+  function initGroupSelector() {
+    const selectEl = document.querySelector('#activeGroupSelect');
+    if (!selectEl) return;
+
+    const savedGroups = JSON.parse(localStorage.getItem('userGroups')) || [];
+    
+    selectEl.innerHTML = '<option value="">-- Choose a group to split with --</option>';
+
+    savedGroups.forEach(group => {
+      const option = document.createElement('option');
+      option.value = group.id;
+      option.textContent = `${group.name} (${(group.members || []).join(', ')})`;
+      selectEl.appendChild(option);
+    });
+
+    const currentActiveId = sessionStorage.getItem('equiledger.activeGroupId');
+    const subtitleEl = document.querySelector('#scanSubtitle');
+
+    if (currentActiveId) {
+      selectEl.value = currentActiveId;
+      const activeGrp = savedGroups.find(g => g.id === currentActiveId);
+      if (activeGrp && subtitleEl) {
+        subtitleEl.textContent = `${activeGrp.name} · Textract OCR`;
+      }
+    }
+
+    selectEl.addEventListener('change', (e) => {
+      const selectedId = e.target.value;
+      const selectedGroup = savedGroups.find(g => g.id === selectedId);
+
+      if (selectedGroup) {
+        sessionStorage.setItem('equiledger.activeGroupId', selectedGroup.id);
+        sessionStorage.setItem('equiledger.activeGroupName', selectedGroup.name);
+        sessionStorage.setItem('equiledger.mode', 'group');
+        if (subtitleEl) subtitleEl.textContent = `${selectedGroup.name} · Textract OCR`;
+      } else {
+        sessionStorage.removeItem('equiledger.activeGroupId');
+        sessionStorage.removeItem('equiledger.activeGroupName');
+        if (subtitleEl) subtitleEl.textContent = 'Select a group · Textract OCR';
+      }
+    });
   }
 
   // --- Core Functionality ---
@@ -121,6 +165,15 @@
     setScanState('busy', 'Processing receipt...');
 
     try {
+      if (mode === 'group') {
+          let activeGroup = sessionStorage.getItem('equiledger.activeGroupId');
+          if (!activeGroup) {
+              document.querySelector('#scanOverlay').hidden = true;
+              alert("Please select a group from the dropdown first.");
+              return;
+          }
+      }
+
       // 1. Upload to S3
       const presignRes = await gatewayFetch('/receipts/upload-url', { 
         method: 'POST', 
@@ -175,11 +228,6 @@
 
       if (mode === 'group') {
           const activeGroup = sessionStorage.getItem('equiledger.activeGroupId');
-          if (!activeGroup) {
-              document.querySelector('#scanOverlay').hidden = true;
-              alert("Please create or select a group first.");
-              return;
-          }
           splitBill.groupId = activeGroup;
       }
 
@@ -339,4 +387,5 @@
   initDropzone();
   initModals();
   initManualDateDefault();
+  initGroupSelector();
 })();

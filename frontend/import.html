@@ -19,10 +19,10 @@
     </nav>
     <div class="actions">
       <button id="openRecord" class="record-button" type="button">＋ Record</button>
-      <span class="avatar">AV</span>
+      <span class="avatar" id="userAvatar">AV</span>
     </div>
   </header>
-
+  
   <main class="imports-page">
     <section class="page-title">
       <h1 id="importsTitle">Imported Receipts & Invoices</h1>
@@ -47,7 +47,6 @@
     </section>
   </main>
 
-  <!-- The rest of the modal structure remains unchanged to ensure JS compatibility -->
   <div id="recordChoice" class="record-choice" hidden>
     <button id="chooseManual" type="button">✎ Log Manually</button>
     <button id="chooseScan" type="button">▣ Scan Bill</button>
@@ -78,9 +77,6 @@
             </select>
           </label>
           <label>Amount<span class="money-input"><b>$</b><input id="manualAmount" inputmode="decimal" placeholder="0.00"></span></label>
-          <!-- Was a hardcoded text value (06/22/2025) that import.js never read.
-               Now a real date input, defaulted to today's date by import.js on load,
-               and included in the /receipts + /ledger payloads. -->
           <label>Date<input id="manualDate" type="date"></label>
           <label>Description<textarea id="manualDescription" placeholder="Enter details manually..."></textarea></label>
         </form>
@@ -101,10 +97,21 @@
         <span class="scan-mark">Ψ</span>
         <div>
           <h2 id="scanTitle">Scan Bill</h2>
-          <p id="scanSubtitle">Trip to Goa · Textract OCR</p>
+          <p id="scanSubtitle">Select a group · Textract OCR</p>
         </div>
         <button id="closeScan" class="icon-button" type="button" aria-label="Close">×</button>
       </header>
+
+      <!-- Group Dropdown placed right inside the scan modal window -->
+      <div style="padding: 12px 24px 0 24px;">
+        <label for="activeGroupSelect" style="display: block; color: #888; font-size: 11px; text-transform: uppercase; margin-bottom: 6px; font-family: 'Courier New', Courier, monospace;">
+            Select Group to Split With:
+        </label>
+        <select id="activeGroupSelect" style="width: 100%; padding: 10px; background: #000; border: 1px solid #444; color: #fff; border-radius: 4px; font-family: inherit;">
+            <option value="">-- Choose a group --</option>
+        </select>
+      </div>
+
       <div id="scanFrame" class="scan-frame">
         <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
         <div id="scanIdle" class="scan-state is-active">
@@ -132,6 +139,7 @@
       </footer>
     </section>
   </div>
+
   <script src="./config.js"></script>
   <script src="./import.js"></script>
 </body>
