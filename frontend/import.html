@@ -141,6 +141,29 @@
   </div>
 
   <script src="./config.js"></script>
+  <script>
+    // Populate dropdown dynamically from local storage userGroups on load
+    document.addEventListener('DOMContentLoaded', () => {
+      const selectEl = document.querySelector('#activeGroupSelect');
+      if (selectEl) {
+        const savedGroups = JSON.parse(localStorage.getItem('userGroups')) || [];
+        savedGroups.forEach(g => {
+          const opt = document.createElement('option');
+          opt.value = g.id;
+          opt.textContent = `${g.name} (${(g.members || []).join(', ')})`;
+          selectEl.appendChild(opt);
+        });
+
+        // Set active selection if stored previously
+        const activeId = sessionStorage.getItem('equiledger.activeGroupId');
+        if (activeId) selectEl.value = activeId;
+
+        selectEl.addEventListener('change', (e) => {
+          sessionStorage.setItem('equiledger.activeGroupId', e.target.value);
+        });
+      }
+    });
+  </script>
   <script src="./import.js"></script>
 </body>
 </html>

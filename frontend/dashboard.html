@@ -14,7 +14,6 @@
       </span>
       <span>EquiLedgerAI</span>
     </a>
-    <!-- Changed from anchor tag to button to open the popup modal -->
     <button id="openCreateGroupModal" class="tab-button" type="button" style="background: none; border: none; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;">+ Create Group</button>
     <nav class="main-tabs" aria-label="Workspace views">
       <button class="tab-button is-active" type="button" data-view="dashboard">
@@ -156,7 +155,6 @@
   <script src="./config.js"></script>
   <script src="./app.js"></script>
   <script>
-    // Quick inline handler to toggle the group popup modal smoothly from dashboard
     document.addEventListener('DOMContentLoaded', () => {
       const openBtn = document.querySelector('#openCreateGroupModal');
       const modal = document.querySelector('#createGroupModal');
@@ -207,7 +205,71 @@
         alert(`Group "${groupName}" created successfully!`);
         window.location.assign('./import.html');
       });
+
+      // --- Intercept group card clicks on the dashboard to show saved finalized bill breakdown instead of routing to imports ---
+      const dashboardPanels = document.querySelector('#dashboardPanels');
+      if (dashboardPanels) {
+        dashboardPanels.addEventListener('click', (e) => {
+          const card = e.target.closest('.group-card, [data-id]');
+          if (!card) return;
+
+          const groupId = card.getAttribute('data-id') || card.dataset.id;
+          const groupNameEl = card.querySelector('h3, strong, .group-title');
+          const groupName = groupNameEl ? groupNameEl.textContent.trim() : '';
+
+          const savedGroups = JSON.parse(localStorage.getItem('userGroups')) || [];
+          const targetGroup = savedGroups.find(g => g.id === groupId || g.name === groupName);
+
+          if (targetGroup && targetGroup.lastBill) {
+            e.preventDefault();
+            e.stopPropagation();
+            showGroupBillSummaryModal(targetGroup);
+          }
+        });
+      }
     });
+
+    function showGroupBillSummaryModal(group) {
+      let modalOverlay = document.querySelector('#groupBillModal');
+      if (!modalOverlay) {
+        modalOverlay = document.createElement('div');
+        modalOverlay.id = 'groupBillModal';
+        modalOverlay.style.cssText = "position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 2000;";
+        document.body.appendChild(modalOverlay);
+      }
+
+      const payload = group.lastBill;
+      const balancesListHtml = payload.balances.map(b => `
+        <div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #333;">
+          <span><strong>${b.name}</strong></span>
+          <span style="color: ${b.finalBalance > 0 ? '#ff4b4b' : '#22c55e'};">₹${Math.round(b.finalBalance)}</span>
+        </div>
+      `).join('');
+
+      modalOverlay.innerHTML = `
+        <div style="background: #161616; border: 1px solid #333; padding: 24px; border-radius: 8px; width: 420px; max-width: 90%; color: #fff; font-family: inherit;">
+          <h2 style="margin-top: 0; font-size: 18px;">📁 ${group.name} - Finalized Bill</h2>
+          <p style="font-size: 13px; color: #888; margin-bottom: 16px;">Existing split breakdown for this trip:</p>
+          <div style="max-height: 200px; overflow-y: auto; margin-bottom: 20px;">
+            ${balancesListHtml}
+          </div>
+          <div style="display: flex; justify-content: space-between; font-weight: bold; margin-bottom: 20px; padding-top: 10px; border-top: 1px solid #444;">
+            <span>Total Bill:</span>
+            <span>₹${Math.round(payload.total)}</span>
+          </div>
+          <div style="display: flex; justify-content: flex-end; gap: 10px;">
+            <button id="closeGroupModalCard" style="padding: 8px 16px; background: #333; color: #fff; border: none; border-radius: 4px; cursor: pointer;">Close</button>
+            <button id="addNewBillFromGroup" style="padding: 8px 16px; background: #2563eb; color: #fff; border: none; border-radius: 4px; cursor: pointer;">+ Add New Bill</button>
+          </div>
+        </div>
+      `;
+
+      document.querySelector('#closeGroupModalCard').onclick = () => modalOverlay.remove();
+      document.querySelector('#addNewBillFromGroup').onclick = () => {
+          sessionStorage.setItem('equiledger.activeGroupId', group.id);
+          window.location.assign('./import.html');
+      };
+    }
   </script>
 </body>
 </html>

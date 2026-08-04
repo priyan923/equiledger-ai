@@ -30,42 +30,31 @@
   const bill = JSON.parse(sessionStorage.getItem('equiledger.parsedBill') || 'null') || fallbackBill;
   const assignments = bill.items.map(item => ({ itemId: item.id, friendIds: [] }));
   
-  let friends = [];
-  let payerId = '';
-  let activeFriendId = 'aman';
+  let payerId = 'akansha';
+  let activeFriendId = payerId;
 
-  async function loadGroupMembers() {
-    try {
-      const res = await fetch(`${API_CONFIG.baseUrl.replace(/\/$/, '')}/profile`, {
-        headers: { Authorization: token() }
-      });
-      
-      if (res.ok) {
-        const profile = await res.json();
-        payerId = profile.userId || profile.email || 'aman'; 
-        
-        friends = [
-          { id: payerId, name: profile.name || 'You', initials: 'ME', color: 'pink' },
-          { id: 'gargi', name: 'Gargi', initials: 'GA', color: 'green' },
-          { id: 'rohan', name: 'Rohan', initials: 'RO', color: 'blue' }
-        ];
-        
-        activeFriendId = payerId;
-        render(); 
-      } else {
-          throw new Error("Profile API failed");
-      }
-    } catch (err) {
-      console.error("Failed to load members, falling back to defaults", err);
-      payerId = 'aman';
-      friends = [
-        { id: 'aman', name: 'You', initials: 'ME', color: 'pink' },
-        { id: 'gargi', name: 'Gargi', initials: 'GA', color: 'green' }
-      ];
-      activeFriendId = 'aman';
-      render();
+  function getInitialFriends() {
+    const activeGroupId = sessionStorage.getItem('equiledger.activeGroupId');
+    const savedGroups = JSON.parse(localStorage.getItem('userGroups')) || [];
+    const currentGroup = savedGroups.find(g => g.id === activeGroupId);
+
+    if (currentGroup && currentGroup.members && currentGroup.members.length > 0) {
+      return currentGroup.members.map((memberName, idx) => ({
+        id: memberName.toLowerCase().replace(/[^a-z0-9]/g, '') + '-' + idx,
+        name: memberName,
+        initials: memberName.split(' ').map(w => w[0]).join('').substring(0, 2).toUpperCase(),
+        color: idx === 0 ? 'pink' : (idx % 2 === 0 ? 'blue' : 'green')
+      }));
     }
+
+    return [
+      { id: 'akansha', name: 'Akansha', initials: 'AK', color: 'pink' },
+      { id: 'gargi', name: 'Gargi', initials: 'GA', color: 'green' },
+      { id: 'rohan', name: 'Rohan', initials: 'RO', color: 'blue' }
+    ];
   }
+
+  let friends = getInitialFriends();
 
   function getItem(id) {
     return bill.items.find(item => item.id === id);
@@ -99,24 +88,24 @@
 
   function removeFriend(friendId) {
     friends = friends.filter(friend => friend.id !== friendId);
-    
     assignments.forEach(assignment => {
       assignment.friendIds = assignment.friendIds.filter(id => id !== friendId);
     });
-    
     if (activeFriendId === friendId) {
-      activeFriendId = payerId;
+      activeFriendId = friends[0] ? friends[0].id : '';
     }
-    
     render();
   }
 
   function renderFriends() {
+    const container = document.querySelector('#friendCards');
+    if (!container) return;
+
     const friendsHtml = friends.map(friend => {
       const base = baseShareFor(friend.id);
       const selected = activeFriendId === friend.id;
       const subtitle = base > 0 ? rupee(base) : 'Nothing selected';
-      const isMe = friend.id === payerId; 
+      const isMe = friend.name.toLowerCase() === 'you' || friend.name.toLowerCase() === 'akansha'; 
       
       const deleteBtn = !isMe ? `<span class="delete-friend" data-id="${friend.id}" style="position: absolute; top: 8px; right: 8px; background: rgba(255, 75, 75, 0.15); color: #ff4b4b; border-radius: 50%; width: 22px; height: 22px; font-size: 12px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-weight: bold;">✕</span>` : '';
 
@@ -136,16 +125,16 @@
       </div>
     `;
 
-    document.querySelector('#friendCards').innerHTML = friendsHtml + addFriendHtml;
+    container.innerHTML = friendsHtml + addFriendHtml;
 
-    document.querySelectorAll('.friend-card[data-id]').forEach(card => {
+    container.querySelectorAll('.friend-card[data-id]').forEach(card => {
       card.addEventListener('click', () => {
         activeFriendId = card.dataset.id;
         render();
       });
     });
 
-    document.querySelectorAll('.delete-friend').forEach(btn => {
+    container.querySelectorAll('.delete-friend').forEach(btn => {
       btn.addEventListener('click', (event) => {
         event.stopPropagation();
         removeFriend(btn.dataset.id);
@@ -155,24 +144,23 @@
     const submitNewFriend = () => {
       const inputEl = document.querySelector('#newFriendInput');
       const name = inputEl.value.trim();
-      
       if (name) {
         const dynamicId = name.toLowerCase().replace(/[^a-z0-9]/g, '') + '-' + Math.floor(Math.random() * 10000);
-        
         friends.push({
           id: dynamicId,
           name: name,
           initials: name.substring(0, 2).toUpperCase(),
           color: 'gray'
         });
-        
         activeFriendId = dynamicId;
         render();
       }
     };
 
-    document.querySelector('#addFriendSubmit').addEventListener('click', submitNewFriend);
-    document.querySelector('#newFriendInput').addEventListener('keypress', (event) => {
+    const submitBtn = document.querySelector('#addFriendSubmit');
+    const inputField = document.querySelector('#newFriendInput');
+    if (submitBtn) submitBtn.addEventListener('click', submitNewFriend);
+    if (inputField) inputField.addEventListener('keypress', (event) => {
       if (event.key === 'Enter') submitNewFriend();
     });
   }
@@ -181,31 +169,35 @@
     const activeFriend = friends.find(friend => friend.id === activeFriendId) || friends[0];
     if (!activeFriend) return; 
 
-    document.querySelector('#activePrompt').textContent = `${activeFriend.name}, tap your items below`;
+    const promptEl = document.querySelector('#activePrompt');
+    const gridEl = document.querySelector('#itemGrid');
+    if (promptEl) promptEl.textContent = `${activeFriend.name}, tap your items below`;
     
-    document.querySelector('#itemGrid').innerHTML = bill.items.map(item => {
-      const assignment = getAssignment(item.id);
-      const primaryOwner = assignment.friendIds[assignment.friendIds.length - 1] || '';
-      const chips = assignment.friendIds.length
-        ? assignment.friendIds.map(id => {
-            const f = friends.find(friend => friend.id === id);
-            return f ? `<span class="owner-chip">${f.name}</span>` : '';
-          }).join(' ')
-        : '<span class="owner-chip"></span>';
-        
-      return `
-        <button class="item-row" data-id="${item.id}" ${primaryOwner ? `data-owner="${primaryOwner}"` : ''} type="button">
-          <span class="item-emoji">${item.emoji}</span>
-          <span><h2>${item.name}</h2><strong>${rupee(item.amount)}</strong><br>${chips}</span>
-          <small>${rupee(item.amount)}</small>
-          <span class="check">✓</span>
-        </button>
-      `;
-    }).join('');
+    if (gridEl) {
+      gridEl.innerHTML = bill.items.map(item => {
+        const assignment = getAssignment(item.id);
+        const primaryOwner = assignment.friendIds[assignment.friendIds.length - 1] || '';
+        const chips = assignment.friendIds.length
+          ? assignment.friendIds.map(id => {
+              const f = friends.find(friend => friend.id === id);
+              return f ? `<span class="owner-chip">${f.name}</span>` : '';
+            }).join(' ')
+          : '<span class="owner-chip"></span>';
+          
+        return `
+          <button class="item-row" data-id="${item.id}" ${primaryOwner ? `data-owner="${primaryOwner}"` : ''} type="button">
+            <span class="item-emoji">${item.emoji}</span>
+            <span><h2>${item.name}</h2><strong>${rupee(item.amount)}</strong><br>${chips}</span>
+            <small>${rupee(item.amount)}</small>
+            <span class="check">✓</span>
+          </button>
+        `;
+      }).join('');
 
-    document.querySelectorAll('.item-row').forEach(row => {
-      row.addEventListener('click', () => toggleItem(row.dataset.id));
-    });
+      gridEl.querySelectorAll('.item-row').forEach(row => {
+        row.addEventListener('click', () => toggleItem(row.dataset.id));
+      });
+    }
   }
 
   function toggleItem(itemId) {
@@ -222,15 +214,18 @@
   function renderFooter() {
     const count = claimedCount();
     const totalItems = bill.items.length;
-    document.querySelector('#claimedCount').textContent = `${count}/${totalItems} items claimed`;
-    document.querySelector('#progressBar').style.width = `${(count / totalItems) * 100}%`;
-    document.querySelector('#claimedTotal').textContent = rupee(claimedBaseTotal());
-    document.querySelector('#unclaimedText').textContent = `${totalItems - count} items unclaimed`;
     
+    const countEl = document.querySelector('#claimedCount');
+    const barEl = document.querySelector('#progressBar');
+    const totalEl = document.querySelector('#claimedTotal');
+    const unclaimedEl = document.querySelector('#unclaimedText');
     const finalizeBtn = document.querySelector('#finalizeSplit');
-    if (finalizeBtn) {
-        finalizeBtn.classList.toggle('is-ready', count === totalItems);
-    }
+
+    if (countEl) countEl.textContent = `${count}/${totalItems} items claimed`;
+    if (barEl) barEl.style.width = `${(count / totalItems) * 100}%`;
+    if (totalEl) totalEl.textContent = rupee(claimedBaseTotal());
+    if (unclaimedEl) unclaimedEl.textContent = `${totalItems - count} items unclaimed`;
+    if (finalizeBtn) finalizeBtn.classList.toggle('is-ready', count === totalItems);
   }
 
   function render() {
@@ -265,7 +260,7 @@
         baseSubtotal,
         taxShare,
         finalBalance,
-        payer: friend.id === payerId
+        payer: friend.id === payerId || friend.name.toLowerCase() === 'akansha' || friend.name.toLowerCase() === 'you'
       };
     });
 
@@ -285,59 +280,74 @@
     };
   }
 
-  async function handleFinalize() {
+  function handleFinalize() {
     if (claimedCount() < bill.items.length) {
         alert("Please claim all items before finalizing the split!");
         return;
     }
 
     const payload = buildSettlementPayload();
-    const isLiveApi = !API_CONFIG.baseUrl.includes('YOUR_API');
 
-    if (isLiveApi) {
-        try {
-            const btn = document.querySelector('#finalizeSplit');
-            btn.textContent = "Processing...";
-            btn.disabled = true;
-
-            const response = await fetch(`${API_CONFIG.baseUrl.replace(/\/$/, '')}/groups/${payload.groupId}/splits`, {
-                method: 'POST',
-                headers: {
-                    Authorization: token(),
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(payload)
-            });
-
-            if (!response.ok) throw new Error(`Ledger commit failed with ${response.status}`);
-        } catch (err) {
-            console.error("Failed to submit split:", err);
-            alert("Could not save the ledger. Check your network or API Gateway.");
-            const btn = document.querySelector('#finalizeSplit');
-            btn.textContent = "Finalize Split";
-            btn.disabled = false;
-            return;
-        }
+    let modalOverlay = document.querySelector('#splitSummaryModal');
+    if (!modalOverlay) {
+      modalOverlay = document.createElement('div');
+      modalOverlay.id = 'splitSummaryModal';
+      modalOverlay.style.cssText = "position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 2000;";
+      document.body.appendChild(modalOverlay);
     }
 
-    // --- Persist calculated balance and transaction count back to localStorage for the Dashboard ---
-    const activeGroupId = sessionStorage.getItem('equiledger.activeGroupId');
-    let savedGroups = JSON.parse(localStorage.getItem('userGroups')) || [];
-    const groupIndex = savedGroups.findIndex(g => g.id === activeGroupId);
+    const balancesListHtml = payload.balances.map(b => `
+      <div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #333;">
+        <span><strong>${b.name}</strong></span>
+        <span style="color: ${b.finalBalance > 0 ? '#ff4b4b' : '#22c55e'};">₹${Math.round(b.finalBalance)}</span>
+      </div>
+    `).join('');
 
-    if (groupIndex !== -1) {
-        const currentSpent = parseFloat((savedGroups[groupIndex].balance || '0').replace(/[^0-9.-]+/g, "")) || 0;
-        const newTotal = currentSpent + Number(bill.total);
-        
-        savedGroups[groupIndex].balance = `-₹${Math.round(newTotal)}`;
-        savedGroups[groupIndex].transactions = (savedGroups[groupIndex].transactions || 0) + 1;
-        
-        localStorage.setItem('userGroups', JSON.stringify(savedGroups));
-    }
+    modalOverlay.innerHTML = `
+      <div style="background: #161616; border: 1px solid #333; padding: 24px; border-radius: 8px; width: 420px; max-width: 90%; color: #fff; font-family: inherit;">
+        <h2 style="margin-top: 0; font-size: 18px;">📊 Bill Settlement Summary</h2>
+        <p style="font-size: 13px; color: #888; margin-bottom: 16px;">Here is what each member owes for this bill:</p>
+        <div style="max-height: 200px; overflow-y: auto; margin-bottom: 20px;">
+          ${balancesListHtml}
+        </div>
+        <div style="display: flex; justify-content: space-between; font-weight: bold; margin-bottom: 20px; padding-top: 10px; border-top: 1px solid #444;">
+          <span>Total Bill (incl. taxes):</span>
+          <span>₹${Math.round(bill.total)}</span>
+        </div>
+        <div style="display: flex; justify-content: flex-end; gap: 10px;">
+          <button id="closeSummaryModal" style="padding: 8px 16px; background: #333; color: #fff; border: none; border-radius: 4px; cursor: pointer;">Cancel</button>
+          <button id="confirmAndSaveSplit" style="padding: 8px 16px; background: #2563eb; color: #fff; border: none; border-radius: 4px; cursor: pointer;">Save to Group Ledger</button>
+        </div>
+      </div>
+    `;
 
-    // Force the dashboard to open in Group Mode so they can see their new balances
-    sessionStorage.setItem('equiledger.mode', 'group');
-    window.location.assign('./dashboard.html');
+    document.querySelector('#closeSummaryModal').onclick = () => {
+      modalOverlay.remove();
+    };
+
+    document.querySelector('#confirmAndSaveSplit').onclick = () => {
+      const myBalanceObj = payload.balances.find(b => b.payer || b.name.toLowerCase() === 'akansha' || b.name.toLowerCase() === 'you');
+      const myShare = myBalanceObj ? myBalanceObj.finalBalance : bill.total;
+
+      const activeGroupId = sessionStorage.getItem('equiledger.activeGroupId');
+      let savedGroups = JSON.parse(localStorage.getItem('userGroups')) || [];
+      const groupIndex = savedGroups.findIndex(g => g.id === activeGroupId);
+
+      if (groupIndex !== -1) {
+          const currentSpent = parseFloat((savedGroups[groupIndex].balance || '0').replace(/[^0-9.-]+/g, "")) || 0;
+          const newTotal = currentSpent + Number(myShare);
+          
+          savedGroups[groupIndex].balance = `-₹${Math.round(newTotal)}`;
+          savedGroups[groupIndex].transactions = (savedGroups[groupIndex].transactions || 0) + 1;
+          savedGroups[groupIndex].members = payload.balances.map(b => b.name);
+          savedGroups[groupIndex].lastBill = payload;
+          
+          localStorage.setItem('userGroups', JSON.stringify(savedGroups));
+      }
+
+      sessionStorage.setItem('equiledger.mode', 'group');
+      window.location.assign('./dashboard.html');
+    };
   }
 
   function init() {
@@ -354,7 +364,7 @@
         finalizeBtn.addEventListener('click', handleFinalize);
     }
 
-    loadGroupMembers();
+    render();
   }
 
   init();

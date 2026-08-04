@@ -368,6 +368,49 @@
     `).join('');
   }
 
+  function showGroupBillSummaryModal(group) {
+    let modalOverlay = document.querySelector('#groupBillModal');
+    if (!modalOverlay) {
+      modalOverlay = document.createElement('div');
+      modalOverlay.id = 'groupBillModal';
+      modalOverlay.style.cssText = "position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 2000;";
+      document.body.appendChild(modalOverlay);
+    }
+
+    const payload = group.lastBill;
+    const balancesListHtml = payload.balances.map(b => `
+      <div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #333;">
+        <span><strong>${b.name}</strong></span>
+        <span style="color: ${b.finalBalance > 0 ? '#ff4b4b' : '#22c55e'};">₹${Math.round(b.finalBalance)}</span>
+      </div>
+    `).join('');
+
+    modalOverlay.innerHTML = `
+      <div style="background: #161616; border: 1px solid #333; padding: 24px; border-radius: 8px; width: 420px; max-width: 90%; color: #fff; font-family: inherit;">
+        <h2 style="margin-top: 0; font-size: 18px;">📁 ${group.name} - Finalized Bill</h2>
+        <p style="font-size: 13px; color: #888; margin-bottom: 16px;">Existing split breakdown for this trip:</p>
+        <div style="max-height: 200px; overflow-y: auto; margin-bottom: 20px;">
+          ${balancesListHtml}
+        </div>
+        <div style="display: flex; justify-content: space-between; font-weight: bold; margin-bottom: 20px; padding-top: 10px; border-top: 1px solid #444;">
+          <span>Total Bill:</span>
+          <span>₹${Math.round(payload.total)}</span>
+        </div>
+        <div style="display: flex; justify-content: flex-end; gap: 10px;">
+          <button id="closeGroupModalCard" style="padding: 8px 16px; background: #333; color: #fff; border: none; border-radius: 4px; cursor: pointer;">Close</button>
+          <button id="addNewBillFromGroup" style="padding: 8px 16px; background: #2563eb; color: #fff; border: none; border-radius: 4px; cursor: pointer;">+ Add New Bill</button>
+        </div>
+      </div>
+    `;
+
+    document.querySelector('#closeGroupModalCard').onclick = () => modalOverlay.remove();
+    document.querySelector('#addNewBillFromGroup').onclick = () => {
+        modalOverlay.remove();
+        sessionStorage.setItem('equiledger.activeGroupId', group.id);
+        window.location.assign('./import.html');
+    };
+  }
+
   async function updateMode() {
     writeStoredMode(isGroupModeActive);
 
@@ -405,14 +448,27 @@
     if (isGroupModeActive) {
         renderGroupDashboard();
         document.querySelectorAll(".group-card").forEach(card => {
-            card.onclick = () => {
-                sessionStorage.setItem("equiledger.activeGroupId", card.dataset.groupId || 'group_default');
-                sessionStorage.setItem("equiledger.activeGroupName", card.dataset.groupName);
+            card.onclick = (e) => {
+                const groupId = card.dataset.groupId || 'group_default';
+                const groupName = card.dataset.groupName;
+                
+                const savedGroups = JSON.parse(localStorage.getItem('userGroups')) || [];
+                const targetGroup = savedGroups.find(g => g.id === groupId || g.name === groupName);
+
+                if (targetGroup && targetGroup.lastBill) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    showGroupBillSummaryModal(targetGroup);
+                    return;
+                }
+
+                sessionStorage.setItem("equiledger.activeGroupId", groupId);
+                sessionStorage.setItem("equiledger.activeGroupName", groupName);
                 sessionStorage.setItem(
                     "equiledger.activeGroup",
                     JSON.stringify({
-                        groupId: card.dataset.groupId || 'group_default',
-                        groupName: card.dataset.groupName,
+                        groupId: groupId,
+                        groupName: groupName,
                         members: ["You"]
                     })
                 );
