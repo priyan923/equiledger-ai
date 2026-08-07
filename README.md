@@ -23,7 +23,6 @@ EquiLedger AI fixes this by running a **cloud-native AI OCR pipeline** combined 
 * **Storage Architecture:** `Amazon S3` — Asset buckets that preserve raw receipt copies securely and automatically trigger the AI extraction Lambdas (`s3:ObjectCreated`).
 * **Infrastructure as Code (IaC):** `AWS SAM` (Serverless Application Model) — Declarative YAML templating for seamless deployment and resource provisioning.
 
-Here is an expanded, production-ready version of your **EquiLedger AI README**. It retains your original vision while adding structured sections for the system architecture, detailed end-to-end workflows, technical installation steps, and future possibilities.
 
 ---
 
